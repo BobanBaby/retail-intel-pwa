@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Camera,
   CheckCircle2,
@@ -12,6 +12,13 @@ import {
   ChevronRight,
   TrendingUp,
   Package,
+  Search,
+  Check,
+  Compass,
+  Navigation,
+  Phone,
+  User,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   AuditRecord,
@@ -93,6 +100,110 @@ export default function AuditForm({
   const [newStoreDistrict, setNewStoreDistrict] = useState("Mumbai City");
   const [newStoreState, setNewStoreState] = useState("Maharashtra");
   const [newStoreArea, setNewStoreArea] = useState("");
+  const [newStoreOwner, setNewStoreOwner] = useState("");
+  const [newStorePhone, setNewStorePhone] = useState("");
+
+  // Search & Filter State for Shops
+  const [showStoreSearchModal, setShowStoreSearchModal] = useState(false);
+  const [storeSearchQuery, setStoreSearchQuery] = useState("");
+  const [searchDistrict, setSearchDistrict] = useState("All");
+  const [searchChannel, setSearchChannel] = useState("All");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [sortByProximity, setSortByProximity] = useState(false);
+  const [detectingGps, setDetectingGps] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!selectedStoreId && stores.length > 0) {
+      setSelectedStoreId(stores[0].id);
+    }
+  }, [stores, selectedStoreId]);
+
+  // Available unique districts from registered stores
+  const availableDistricts = useMemo(() => {
+    const set = new Set<string>();
+    stores.forEach((s) => {
+      if (s.district) set.add(s.district.trim());
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [stores]);
+
+  // Haversine formula for distance in km
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const handleRequestLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+    setDetectingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+        setSortByProximity(true);
+        setDetectingGps(false);
+      },
+      (err) => {
+        setDetectingGps(false);
+        console.warn("GPS lookup failed", err);
+      },
+      { timeout: 7000, enableHighAccuracy: true }
+    );
+  };
+
+  // Filtered & Sorted Stores for Search Modal
+  const searchFilteredStores = useMemo(() => {
+    const q = storeSearchQuery.trim().toLowerCase();
+    let list = stores.filter((s) => {
+      const matchText =
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        s.area.toLowerCase().includes(q) ||
+        (s.district && s.district.toLowerCase().includes(q)) ||
+        (s.ownerName && s.ownerName.toLowerCase().includes(q)) ||
+        (s.phone && s.phone.includes(q)) ||
+        s.type.toLowerCase().includes(q);
+
+      const matchDistrict =
+        searchDistrict === "All" || s.district === searchDistrict;
+
+      const matchChannel =
+        searchChannel === "All" || s.type === searchChannel;
+
+      return matchText && matchDistrict && matchChannel;
+    });
+
+    if (sortByProximity && userLocation) {
+      list = [...list].sort((a, b) => {
+        const distA =
+          a.gpsLat && a.gpsLng
+            ? calculateDistance(userLocation.lat, userLocation.lng, a.gpsLat, a.gpsLng)
+            : 999999;
+        const distB =
+          b.gpsLat && b.gpsLng
+            ? calculateDistance(userLocation.lat, userLocation.lng, b.gpsLat, b.gpsLng)
+            : 999999;
+        return distA - distB;
+      });
+    }
+
+    return list;
+  }, [stores, storeSearchQuery, searchDistrict, searchChannel, sortByProximity, userLocation]);
 
   // Category State
   const [selectedCategory, setSelectedCategory] = useState<ProductCategoryConfig>(
@@ -235,6 +346,8 @@ export default function AuditForm({
     const newStore: Store = {
       id: "str-" + Date.now().toString(36),
       name: newStoreName.trim(),
+      ownerName: newStoreOwner.trim() || undefined,
+      phone: newStorePhone.trim() || undefined,
       type: newStoreType,
       state: newStoreState.trim() || "State",
       district: newStoreDistrict.trim() || "District",
@@ -245,8 +358,12 @@ export default function AuditForm({
     onAddStore(newStore);
     setSelectedStoreId(newStore.id);
     setShowNewStoreModal(false);
+    setShowStoreSearchModal(false);
     setNewStoreName("");
     setNewStoreArea("");
+    setNewStoreOwner("");
+    setNewStorePhone("");
+    setStoreSearchQuery("");
   };
 
   // Submit Audit
@@ -377,11 +494,14 @@ export default function AuditForm({
             </label>
             <button
               type="button"
-              onClick={() => setShowNewStoreModal(true)}
+              onClick={() => {
+                setNewStoreName(storeSearchQuery.trim());
+                setShowNewStoreModal(true);
+              }}
               className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Shop</span>
+              <span>+ Add New Shop</span>
             </button>
           </div>
 
@@ -401,33 +521,54 @@ export default function AuditForm({
               </button>
             </div>
           ) : (
-            <>
-              <select
-                value={selectedStoreId}
-                onChange={(e) => setSelectedStoreId(e.target.value)}
-                className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden text-slate-900"
+            <div className="space-y-2">
+              {/* Tap to Search / Change Store Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStoreSearchModal(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 150);
+                }}
+                className="w-full text-left bg-slate-50 hover:bg-slate-100 active:bg-slate-200/70 transition p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-hidden group"
               >
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.district} &bull; {s.area} &bull; {s.type})
-                  </option>
-                ))}
-              </select>
-
-              {currentStore && (
-                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <span className="font-medium text-slate-700 flex items-center space-x-1">
-                    <MapPin className="w-3 h-3 text-slate-400" />
-                    <span>
-                      {currentStore.district} &bull; {currentStore.area}
-                    </span>
-                  </span>
-                  <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
-                    {currentStore.type}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-extrabold text-slate-900 truncate">
+                        {currentStore ? currentStore.name : "Select or Search Retail Shop"}
+                      </span>
+                      {currentStore && (
+                        <span className="text-[10px] bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded-full shrink-0">
+                          {currentStore.type}
+                        </span>
+                      )}
+                    </div>
+                    {currentStore ? (
+                      <p className="text-[11px] text-slate-500 truncate mt-1 flex items-center space-x-1">
+                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>
+                          {currentStore.district} &bull; {currentStore.area}
+                        </span>
+                        {currentStore.ownerName && (
+                          <>
+                            <span className="text-slate-300">&bull;</span>
+                            <span className="text-slate-600">Owner: {currentStore.ownerName}</span>
+                          </>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Tap here to search among {stores.length} shops...
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center space-x-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs group-hover:bg-blue-700 transition">
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Search</span>
+                  </div>
                 </div>
-              )}
-            </>
+              </button>
+            </div>
           )}
         </div>
 
@@ -825,6 +966,237 @@ export default function AuditForm({
         </button>
       </form>
 
+      {/* MODAL: SEARCH & SELECT SHOP (Fast Auto-Complete & District Filters) */}
+      {showStoreSearchModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90vh] sm:max-h-[82vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="p-3.5 sm:p-4 border-b border-slate-200 shrink-0 bg-slate-50">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                    <StoreIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Select Retail Shop</h3>
+                    <p className="text-[11px] text-slate-500">
+                      {stores.length} shops registered across {availableDistricts.length > 1 ? availableDistricts.length - 1 : 1} district(s)
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewStoreName(storeSearchQuery.trim());
+                      setShowNewStoreModal(true);
+                    }}
+                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1.5 rounded-lg flex items-center space-x-1 shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ New Shop</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowStoreSearchModal(false)}
+                    className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Instant Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={storeSearchQuery}
+                  onChange={(e) => setStoreSearchQuery(e.target.value)}
+                  placeholder="Search shop name, area, district, owner, phone..."
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden text-slate-900 font-medium placeholder:text-slate-400"
+                />
+                {storeSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setStoreSearchQuery("")}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Pills: Districts & Channel */}
+              <div className="mt-2.5 flex items-center space-x-2 overflow-x-auto pb-1 text-xs scrollbar-none">
+                {/* District Filter Pill */}
+                <div className="shrink-0 flex items-center space-x-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">District:</span>
+                  <select
+                    value={searchDistrict}
+                    onChange={(e) => setSearchDistrict(e.target.value)}
+                    className="bg-transparent text-[11px] font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    {availableDistricts.map((d) => (
+                      <option key={d} value={d}>
+                        {d === "All" ? "All Districts" : d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Channel Filter Pill */}
+                <div className="shrink-0 flex items-center space-x-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Type:</span>
+                  <select
+                    value={searchChannel}
+                    onChange={(e) => setSearchChannel(e.target.value)}
+                    className="bg-transparent text-[11px] font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="All">All Channels</option>
+                    {STORE_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Proximity / GPS Sort Button */}
+                <button
+                  type="button"
+                  onClick={handleRequestLocation}
+                  className={`shrink-0 flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                    sortByProximity
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Compass className={`w-3.5 h-3.5 ${detectingGps ? "animate-spin text-blue-600" : ""}`} />
+                  <span>{detectingGps ? "Locating..." : sortByProximity ? "Sorted: Nearest" : "Near Me (GPS)"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Results List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 sm:p-3">
+              {searchFilteredStores.length === 0 ? (
+                <div className="text-center py-10 px-4">
+                  <StoreIcon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-800 mb-1">
+                    No shops match {storeSearchQuery ? `"${storeSearchQuery}"` : "the selected filters"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mb-3">
+                    Can&apos;t find this retailer? You can add them in 15 seconds.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewStoreName(storeSearchQuery.trim());
+                      setShowNewStoreModal(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl inline-flex items-center space-x-1.5 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>
+                      {storeSearchQuery ? `+ Register "${storeSearchQuery}"` : "+ Register New Shop"}
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {searchFilteredStores.map((s) => {
+                    const isSelected = s.id === selectedStoreId;
+                    const distanceKm =
+                      userLocation && s.gpsLat && s.gpsLng
+                        ? calculateDistance(userLocation.lat, userLocation.lng, s.gpsLat, s.gpsLng)
+                        : null;
+
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStoreId(s.id);
+                          setShowStoreSearchModal(false);
+                        }}
+                        className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between border ${
+                          isSelected
+                            ? "bg-blue-50/80 border-blue-400 ring-1 ring-blue-400"
+                            : "bg-white hover:bg-slate-50 border-slate-200"
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0 pr-3">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-xs font-bold text-slate-900 truncate">
+                              {s.name}
+                            </h4>
+                            <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full shrink-0">
+                              {s.type}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-1 truncate">
+                            <span className="flex items-center space-x-1 shrink-0">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              <span className="font-medium text-slate-700">
+                                {s.district} &bull; {s.area}
+                              </span>
+                            </span>
+                            {distanceKm !== null && (
+                              <span className="text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                                {distanceKm < 1
+                                  ? `${Math.round(distanceKm * 1000)}m away`
+                                  : `${distanceKm.toFixed(1)}km away`}
+                              </span>
+                            )}
+                          </div>
+                          {(s.ownerName || s.phone) && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate flex items-center space-x-2">
+                              {s.ownerName && <span>Owner: {s.ownerName}</span>}
+                              {s.phone && <span>Tel: {s.phone}</span>}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0">
+                          {isSelected ? (
+                            <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="text-slate-300">
+                              <ChevronRight className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs shrink-0">
+              <span className="text-slate-500 font-medium">
+                Showing {searchFilteredStores.length} of {stores.length} shops
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewStoreName(storeSearchQuery.trim());
+                  setShowNewStoreModal(true);
+                }}
+                className="font-bold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Register New Shop</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: ADD SHOP */}
       {showNewStoreModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -851,6 +1223,33 @@ export default function AuditForm({
                   placeholder="e.g. Glamour Unisex Salon"
                   className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Owner Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newStoreOwner}
+                    onChange={(e) => setNewStoreOwner(e.target.value)}
+                    placeholder="e.g. Ramesh"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Phone / Tel
+                  </label>
+                  <input
+                    type="tel"
+                    value={newStorePhone}
+                    onChange={(e) => setNewStorePhone(e.target.value)}
+                    placeholder="e.g. 9820012345"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
+                  />
+                </div>
               </div>
 
               <div>

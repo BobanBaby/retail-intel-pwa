@@ -65,10 +65,13 @@ export default function ShopsDirectory({
   ];
 
   const filteredStores = stores.filter((s) => {
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.ownerName && s.ownerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      s.area.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.name.toLowerCase().includes(q) ||
+      (s.ownerName && s.ownerName.toLowerCase().includes(q)) ||
+      s.area.toLowerCase().includes(q) ||
+      (s.district && s.district.toLowerCase().includes(q)) ||
+      (s.city && s.city.toLowerCase().includes(q)) ||
       (s.phone && s.phone.includes(searchTerm));
     const matchesDistrict =
       selectedDistrict === "All" || s.district === selectedDistrict;
