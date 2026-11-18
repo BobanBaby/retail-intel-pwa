@@ -19,11 +19,13 @@ import {
 interface AnalyticsDashboardProps {
   audits: AuditRecord[];
   stores: Store[];
+  isRepView?: boolean;
 }
 
 export default function AnalyticsDashboard({
   audits,
   stores,
+  isRepView = false,
 }: AnalyticsDashboardProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [repFilter, setRepFilter] = useState<string>("All");
@@ -184,7 +186,7 @@ export default function AnalyticsDashboard({
 
       {/* Multi-Dimension Filter Box */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200 mb-3.5 space-y-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className={`grid gap-2 ${isRepView ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">
               Category
@@ -202,22 +204,24 @@ export default function AnalyticsDashboard({
             </select>
           </div>
 
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">
-              Sales Person
-            </label>
-            <select
-              value={repFilter}
-              onChange={(e) => setRepFilter(e.target.value)}
-              className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg p-1.5 focus:outline-hidden"
-            >
-              {reps.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isRepView && (
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">
+                Sales Person
+              </label>
+              <select
+                value={repFilter}
+                onChange={(e) => setRepFilter(e.target.value)}
+                className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg p-1.5 focus:outline-hidden"
+              >
+                {reps.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">
@@ -322,63 +326,65 @@ export default function AnalyticsDashboard({
         </div>
       )}
 
-      {/* SECTION 1: SALES PERSON-WISE PERFORMANCE LEADERBOARD */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-4">
-        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2.5 flex items-center justify-between">
-          <span className="flex items-center space-x-1.5">
-            <Users className="w-3.5 h-3.5 text-blue-600" />
-            <span>Sales Person-Wise Data Submissions</span>
-          </span>
-          <span className="text-[10px] font-semibold text-slate-400">
-            {repLeaderboard.length} Reps Contributing
-          </span>
-        </h3>
+      {/* SECTION 1: SALES PERSON-WISE PERFORMANCE LEADERBOARD (ADMIN ONLY) */}
+      {!isRepView && (
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-4">
+          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+            <span className="flex items-center space-x-1.5">
+              <Users className="w-3.5 h-3.5 text-blue-600" />
+              <span>Sales Person-Wise Data Submissions</span>
+            </span>
+            <span className="text-[10px] font-semibold text-slate-400">
+              {repLeaderboard.length} Reps Contributing
+            </span>
+          </h3>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-400 text-[10px] uppercase">
-                <th className="pb-2">Sales Person</th>
-                <th className="pb-2 text-center">Audits</th>
-                <th className="pb-2 text-center">Shops</th>
-                <th className="pb-2">Districts Assigned</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {repLeaderboard.map((r, idx) => (
-                <tr
-                  key={r.repName}
-                  onClick={() => setRepFilter(r.repName)}
-                  className={`hover:bg-slate-50 cursor-pointer ${
-                    repFilter === r.repName ? "bg-blue-50/70 font-semibold" : ""
-                  }`}
-                >
-                  <td className="py-2.5">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span className="text-slate-900 font-bold">{r.repName}</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 text-center font-black text-blue-600">
-                    {r.auditsCount}
-                  </td>
-                  <td className="py-2.5 text-center text-slate-700 font-semibold">
-                    {r.uniqueShops}
-                  </td>
-                  <td className="py-2.5 text-slate-500 text-[11px] truncate max-w-[140px]">
-                    {r.districtsList || "Local"}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 text-[10px] uppercase">
+                  <th className="pb-2">Sales Person</th>
+                  <th className="pb-2 text-center">Audits</th>
+                  <th className="pb-2 text-center">Shops</th>
+                  <th className="pb-2">Districts Assigned</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {repLeaderboard.map((r, idx) => (
+                  <tr
+                    key={r.repName}
+                    onClick={() => setRepFilter(r.repName)}
+                    className={`hover:bg-slate-50 cursor-pointer ${
+                      repFilter === r.repName ? "bg-blue-50/70 font-semibold" : ""
+                    }`}
+                  >
+                    <td className="py-2.5">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-slate-900 font-bold">{r.repName}</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 text-center font-black text-blue-600">
+                      {r.auditsCount}
+                    </td>
+                    <td className="py-2.5 text-center text-slate-700 font-semibold">
+                      {r.uniqueShops}
+                    </td>
+                    <td className="py-2.5 text-slate-500 text-[11px] truncate max-w-[140px]">
+                      {r.districtsList || "Local"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2">
+            &bull; Click any salesperson row to filter all dashboard insights to their territory.
+          </p>
         </div>
-        <p className="text-[10px] text-slate-400 mt-2">
-          &bull; Click any salesperson row to filter all dashboard insights to their territory.
-        </p>
-      </div>
+      )}
 
       {/* SECTION 2: DISTRICT-WISE RETAIL PENETRATION */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-4">

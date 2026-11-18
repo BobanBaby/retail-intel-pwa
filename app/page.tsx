@@ -96,7 +96,7 @@ export default function Home() {
   };
 
   const handleSyncComplete = async () => {
-    const res = await syncWithCentralRepo();
+    const res = await syncWithCentralRepo(repName, false);
     setAllAudits(res.audits);
     setStores(res.stores);
     setSyncToast(res.message);
@@ -222,9 +222,9 @@ export default function Home() {
           <AuditList audits={myAudits} onDeleteAudit={handleDeleteAudit} />
         )}
 
-        {/* Rep ONLY sees their own beat metrics */}
+        {/* Rep ONLY sees their own beat metrics (Leaderboard hidden from sales reps) */}
         {currentTab === "analytics" && (
-          <AnalyticsDashboard audits={myAudits} stores={stores} />
+          <AnalyticsDashboard audits={myAudits} stores={stores} isRepView={true} />
         )}
 
         {currentTab === "export" && (

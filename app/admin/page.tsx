@@ -52,12 +52,35 @@ export default function AdminPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const loadAdminData = async () => {
+    try {
+      setSyncing(true);
+      const res = await fetch("/api/sync?isAdmin=true");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setAudits(data.audits || []);
+          setStores(data.stores || []);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load admin data:", err);
+      setAudits(getAudits());
+      setStores(getStores());
+    } finally {
+      setSyncing(false);
+      setIsLoaded(true);
+    }
+  };
+
   useEffect(() => {
     // Check if already authenticated in this session
     if (typeof window !== "undefined") {
       const authSession = sessionStorage.getItem("fieldintel_admin_auth");
       if (authSession === "true") {
         setIsAuthenticated(true);
+        loadAdminData();
+        return;
       }
     }
     setStores(getStores());
@@ -73,6 +96,7 @@ export default function AdminPage() {
       if (typeof window !== "undefined") {
         sessionStorage.setItem("fieldintel_admin_auth", "true");
       }
+      loadAdminData();
     } else {
       setPinError(true);
     }
@@ -88,7 +112,7 @@ export default function AdminPage() {
 
   const handleSyncData = async () => {
     setSyncing(true);
-    const res = await syncWithCentralRepo();
+    const res = await syncWithCentralRepo("", true);
     setAudits(res.audits);
     setStores(res.stores);
     setSyncing(false);

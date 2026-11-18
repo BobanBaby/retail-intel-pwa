@@ -63,8 +63,11 @@ export function deleteAudit(id: string): AuditRecord[] {
   return updated;
 }
 
-// Push local records to Central Repo and pull combined data
-export async function syncWithCentralRepo(): Promise<{
+// Push local records to Central Repo and pull authorized scope
+export async function syncWithCentralRepo(
+  repName?: string,
+  isAdmin: boolean = false
+): Promise<{
   success: boolean;
   audits: AuditRecord[];
   stores: Store[];
@@ -80,6 +83,8 @@ export async function syncWithCentralRepo(): Promise<{
       body: JSON.stringify({
         audits: localAudits,
         stores: localStores,
+        repName: repName || "",
+        isAdmin: isAdmin,
       }),
     });
 
@@ -94,7 +99,9 @@ export async function syncWithCentralRepo(): Promise<{
           success: true,
           audits: data.audits,
           stores: data.stores,
-          message: `Synced with Central Server successfully!`,
+          message: isAdmin
+            ? `Admin: Synced ${data.totalAudits} total audits across all reps!`
+            : `Synced your territory audits to Central Repository!`,
         };
       }
     }
