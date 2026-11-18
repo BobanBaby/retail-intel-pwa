@@ -81,11 +81,24 @@ export default function Home() {
   const handleAddStore = (newStore: Store) => {
     const updated = saveStore(newStore);
     setStores(updated);
+    // Auto-sync immediately to Central Server
+    syncWithCentralRepo(repName, false).catch((err) =>
+      console.warn("Auto-sync store failed:", err)
+    );
   };
 
   const handleSubmitAudit = (newAudit: AuditRecord) => {
     const updated = saveAudit(newAudit);
     setAllAudits(updated);
+    // Auto-sync immediately to Central Server so Admin sees it in real time!
+    syncWithCentralRepo(repName, false)
+      .then((res) => {
+        if (res.success) {
+          setAllAudits(res.audits);
+          setStores(res.stores);
+        }
+      })
+      .catch((err) => console.warn("Auto-sync audit failed:", err));
   };
 
   const handleDeleteAudit = (id: string) => {

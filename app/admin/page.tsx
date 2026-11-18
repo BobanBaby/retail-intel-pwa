@@ -55,12 +55,33 @@ export default function AdminPage() {
   const loadAdminData = async () => {
     try {
       setSyncing(true);
-      const res = await fetch("/api/sync?isAdmin=true");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setAudits(data.audits || []);
-          setStores(data.stores || []);
+      // 1. Sync any local device audits & shops to the central server with isAdmin: true
+      const syncResult = await syncWithCentralRepo("", true);
+      if (syncResult && syncResult.audits && syncResult.audits.length > 0) {
+        setAudits(syncResult.audits);
+        setStores(syncResult.stores);
+      } else {
+        // 2. Fetch directly from central server API
+        const res = await fetch("/api/sync?isAdmin=true");
+        if (res.ok) {
+          const data = await res.json();
+          const serverAudits = data.audits || [];
+          const localAudits = getAudits();
+          const auditMap = new Map();
+          localAudits.forEach((a) => auditMap.set(a.id, a));
+          serverAudits.forEach((a: any) => auditMap.set(a.id, a));
+          const mergedAudits = Array.from(auditMap.values());
+          setAudits(mergedAudits);
+
+          const serverStores = data.stores || [];
+          const localStores = getStores();
+          const storeMap = new Map();
+          localStores.forEach((s) => storeMap.set(s.id, s));
+          serverStores.forEach((s: any) => storeMap.set(s.id, s));
+          setStores(Array.from(storeMap.values()));
+        } else {
+          setAudits(getAudits());
+          setStores(getStores());
         }
       }
     } catch (err) {
