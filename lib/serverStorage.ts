@@ -157,6 +157,76 @@ export async function resetCentralDataAsync(): Promise<void> {
   await saveCentralDataAsync(cleanData);
 }
 
+export async function deleteCentralBrandAsync(brandName: string, category?: string): Promise<CentralData> {
+  const data = await getCentralDataAsync();
+  const targetBrand = brandName.trim().toLowerCase();
+  const targetCat = category ? category.trim().toLowerCase() : null;
+
+  const filteredBrands = (data.customBrands || []).filter((b) => {
+    const bName = b.brand.trim().toLowerCase();
+    const bCat = (b.category || "").trim().toLowerCase();
+    if (targetCat) {
+      return !(bName === targetBrand && bCat === targetCat);
+    }
+    return bName !== targetBrand;
+  });
+
+  const updated: CentralData = {
+    ...data,
+    customBrands: filteredBrands,
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return updated;
+}
+
+export async function deleteCentralCategoryAsync(categoryName: string): Promise<CentralData> {
+  const data = await getCentralDataAsync();
+  const targetCat = categoryName.trim().toLowerCase();
+
+  const filteredCategories = (data.customCategories || []).filter(
+    (c) => c.name.trim().toLowerCase() !== targetCat && c.id.toLowerCase() !== targetCat
+  );
+
+  // Also remove brands belonging to this category
+  const filteredBrands = (data.customBrands || []).filter(
+    (b) => (b.category || "").trim().toLowerCase() !== targetCat
+  );
+
+  const updated: CentralData = {
+    ...data,
+    customCategories: filteredCategories,
+    customBrands: filteredBrands,
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return updated;
+}
+
+export async function deleteCentralStoreAsync(storeId: string): Promise<CentralData> {
+  const data = await getCentralDataAsync();
+  const filteredStores = data.stores.filter((s) => s.id !== storeId);
+  const updated: CentralData = {
+    ...data,
+    stores: filteredStores,
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return updated;
+}
+
+export async function deleteCentralAuditAsync(auditId: string): Promise<CentralData> {
+  const data = await getCentralDataAsync();
+  const filteredAudits = data.audits.filter((a) => a.id !== auditId);
+  const updated: CentralData = {
+    ...data,
+    audits: filteredAudits,
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return updated;
+}
+
 export async function syncCentralDataAsync(
   incomingAudits: AuditRecord[],
   incomingStores: Store[],

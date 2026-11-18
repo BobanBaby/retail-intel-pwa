@@ -3,6 +3,10 @@ import {
   getCentralDataAsync,
   resetCentralDataAsync,
   syncCentralDataAsync,
+  deleteCentralBrandAsync,
+  deleteCentralCategoryAsync,
+  deleteCentralStoreAsync,
+  deleteCentralAuditAsync,
 } from "@/lib/serverStorage";
 
 // GET: Retrieve records with strict role separation
@@ -53,10 +57,65 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Receive batch of new audits, shops, custom categories & brands, and return authorized scope
+// POST: Receive batch of new audits, shops, custom categories & brands, or perform admin management actions
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const action = body.action;
+
+    // Handle Admin Deletions & Management Actions
+    if (action === "delete_brand") {
+      const { brandName, category } = body;
+      const updated = await deleteCentralBrandAsync(brandName, category);
+      return NextResponse.json({
+        success: true,
+        message: `Brand "${brandName}" deleted from central catalog`,
+        categories: updated.customCategories || [],
+        brands: updated.customBrands || [],
+        stores: updated.stores,
+        audits: updated.audits,
+      });
+    }
+
+    if (action === "delete_category") {
+      const { categoryName } = body;
+      const updated = await deleteCentralCategoryAsync(categoryName);
+      return NextResponse.json({
+        success: true,
+        message: `Category "${categoryName}" deleted from central catalog`,
+        categories: updated.customCategories || [],
+        brands: updated.customBrands || [],
+        stores: updated.stores,
+        audits: updated.audits,
+      });
+    }
+
+    if (action === "delete_store") {
+      const { storeId } = body;
+      const updated = await deleteCentralStoreAsync(storeId);
+      return NextResponse.json({
+        success: true,
+        message: `Store deleted from central network`,
+        stores: updated.stores,
+        audits: updated.audits,
+        categories: updated.customCategories || [],
+        brands: updated.customBrands || [],
+      });
+    }
+
+    if (action === "delete_audit") {
+      const { auditId } = body;
+      const updated = await deleteCentralAuditAsync(auditId);
+      return NextResponse.json({
+        success: true,
+        message: `Audit record deleted from central repository`,
+        audits: updated.audits,
+        stores: updated.stores,
+        categories: updated.customCategories || [],
+        brands: updated.customBrands || [],
+      });
+    }
+
     const incomingAudits = body.audits || [];
     const incomingStores = body.stores || [];
     const incomingCategories = body.categories || [];

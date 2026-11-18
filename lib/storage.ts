@@ -68,6 +68,180 @@ export function saveCustomBrand(brand: CustomBrandEntry): CustomBrandEntry[] {
   return updated;
 }
 
+export function deleteCustomBrand(brandName: string, category?: string): CustomBrandEntry[] {
+  const current = getCustomBrands();
+  const targetBrand = brandName.trim().toLowerCase();
+  const targetCat = category ? category.trim().toLowerCase() : null;
+
+  const updated = current.filter((b) => {
+    const bName = b.brand.trim().toLowerCase();
+    const bCat = (b.category || "").trim().toLowerCase();
+    if (targetCat) {
+      return !(bName === targetBrand && bCat === targetCat);
+    }
+    return bName !== targetBrand;
+  });
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(updated));
+  }
+  return updated;
+}
+
+export function deleteCustomCategory(categoryName: string): CustomCategoryEntry[] {
+  const current = getCustomCategories();
+  const target = categoryName.trim().toLowerCase();
+  const updated = current.filter(
+    (c) => c.name.trim().toLowerCase() !== target && c.id.toLowerCase() !== target
+  );
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(updated));
+  }
+  return updated;
+}
+
+export async function deleteBrandFromNetwork(brandName: string, category?: string): Promise<{ success: boolean; brands: CustomBrandEntry[] }> {
+  deleteCustomBrand(brandName, category);
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_brand", brandName, category, isAdmin: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.brands && typeof window !== "undefined") {
+        localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(data.brands));
+      }
+      return { success: true, brands: data.brands || getCustomBrands() };
+    }
+  } catch (err) {
+    console.warn("deleteBrandFromNetwork failed on server:", err);
+  }
+  return { success: true, brands: getCustomBrands() };
+}
+
+export async function deleteCategoryFromNetwork(categoryName: string): Promise<{ success: boolean; categories: CustomCategoryEntry[]; brands: CustomBrandEntry[] }> {
+  deleteCustomCategory(categoryName);
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_category", categoryName, isAdmin: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.categories && typeof window !== "undefined") {
+        localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(data.categories));
+      }
+      if (data.brands && typeof window !== "undefined") {
+        localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(data.brands));
+      }
+      return {
+        success: true,
+        categories: data.categories || getCustomCategories(),
+        brands: data.brands || getCustomBrands(),
+      };
+    }
+  } catch (err) {
+    console.warn("deleteCategoryFromNetwork failed on server:", err);
+  }
+  return {
+    success: true,
+    categories: getCustomCategories(),
+    brands: getCustomBrands(),
+  };
+}
+
+export async function deleteStoreFromNetwork(storeId: string): Promise<{ success: boolean; stores: Store[] }> {
+  const current = getStores();
+  const updated = current.filter((s) => s.id !== storeId);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORES_STORAGE_KEY, JSON.stringify(updated));
+  }
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_store", storeId, isAdmin: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.stores && typeof window !== "undefined") {
+        localStorage.setItem(STORES_STORAGE_KEY, JSON.stringify(data.stores));
+      }
+      return { success: true, stores: data.stores || updated };
+    }
+  } catch (err) {
+    console.warn("deleteStoreFromNetwork failed on server:", err);
+  }
+  return { success: true, stores: updated };
+}
+
+export async function deleteAuditFromNetwork(auditId: string): Promise<{ success: boolean; audits: AuditRecord[] }> {
+  const updated = deleteAudit(auditId);
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_audit", auditId, isAdmin: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.audits && typeof window !== "undefined") {
+        localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify(data.audits));
+      }
+      return { success: true, audits: data.audits || updated };
+    }
+  } catch (err) {
+    console.warn("deleteAuditFromNetwork failed on server:", err);
+  }
+  return { success: true, audits: updated };
+}
+
+export async function saveBrandToNetwork(brand: CustomBrandEntry): Promise<{ success: boolean; brands: CustomBrandEntry[] }> {
+  saveCustomBrand(brand);
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brands: [brand], isAdmin: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.brands && typeof window !== "undefined") {
+        localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(data.brands));
+      }
+      return { success: true, brands: data.brands || getCustomBrands() };
+    }
+  } catch (err) {
+    console.warn("saveBrandToNetwork failed:", err);
+  }
+  return { success: true, brands: getCustomBrands() };
+}
+
+export async function saveCategoryToNetwork(cat: CustomCategoryEntry): Promise<{ success: boolean; categories: CustomCategoryEntry[] }> {
+  saveCustomCategory(cat);
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categories: [cat], isAdmin: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.categories && typeof window !== "undefined") {
+        localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(data.categories));
+      }
+      return { success: true, categories: data.categories || getCustomCategories() };
+    }
+  } catch (err) {
+    console.warn("saveCategoryToNetwork failed:", err);
+  }
+  return { success: true, categories: getCustomCategories() };
+}
+
 // Build merged dynamic product categories combining:
 // 1) Base static PRODUCT_CATEGORIES
 // 2) Custom categories added by any rep
