@@ -90,6 +90,26 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
             </button>
           ))}
         </div>
+
+        {/* Brand Filter Pills */}
+        {uniqueBrands.length > 2 && (
+          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none pt-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">Brand:</span>
+            {uniqueBrands.map((b) => (
+              <button
+                key={b}
+                onClick={() => setSelectedBrandFilter(b)}
+                className={`text-[10px] px-2.5 py-0.5 rounded-full whitespace-nowrap font-medium transition ${
+                  selectedBrandFilter === b
+                    ? "bg-slate-900 text-white font-semibold shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {b === "All" ? "All Brands" : b}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Audit Cards List */}
