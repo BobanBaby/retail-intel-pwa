@@ -1,4 +1,4 @@
-import { AuditRecord, Store } from "./types";
+import { AuditRecord, Store, CustomBrandEntry, CustomCategoryEntry } from "./types";
 import { INITIAL_AUDITS, INITIAL_STORES } from "./seedData";
 import fs from "fs";
 import path from "path";
@@ -7,9 +7,11 @@ import path from "path";
 const DATA_FILE = path.join(process.cwd(), ".central_data.json");
 const TMP_DATA_FILE = "/tmp/central_data.json";
 
-interface CentralData {
+export interface CentralData {
   stores: Store[];
   audits: AuditRecord[];
+  customCategories?: CustomCategoryEntry[];
+  customBrands?: CustomBrandEntry[];
   lastUpdated: string;
 }
 
@@ -119,6 +121,8 @@ export async function getCentralDataAsync(): Promise<CentralData> {
   return {
     stores: [],
     audits: [],
+    customCategories: [],
+    customBrands: [],
     lastUpdated: new Date().toISOString(),
   };
 }
@@ -146,6 +150,8 @@ export async function resetCentralDataAsync(): Promise<void> {
   const cleanData: CentralData = {
     stores: [],
     audits: [],
+    customCategories: [],
+    customBrands: [],
     lastUpdated: new Date().toISOString(),
   };
   await saveCentralDataAsync(cleanData);
@@ -153,10 +159,20 @@ export async function resetCentralDataAsync(): Promise<void> {
 
 export async function syncCentralDataAsync(
   incomingAudits: AuditRecord[],
-  incomingStores: Store[]
-): Promise<{ audits: AuditRecord[]; stores: Store[]; addedAuditsCount: number; addedStoresCount: number }> {
+  incomingStores: Store[],
+  incomingCategories: CustomCategoryEntry[] = [],
+  incomingBrands: CustomBrandEntry[] = []
+): Promise<{
+  audits: AuditRecord[];
+  stores: Store[];
+  categories: CustomCategoryEntry[];
+  brands: CustomBrandEntry[];
+  addedAuditsCount: number;
+  addedStoresCount: number;
+}> {
   const current = await getCentralDataAsync();
 
+  // 1. Merge Stores
   const storeMap = new Map<string, Store>();
   current.stores.forEach((s) => storeMap.set(s.id, s));
   let addedStoresCount = 0;
@@ -167,6 +183,7 @@ export async function syncCentralDataAsync(
     storeMap.set(s.id, s);
   });
 
+  // 2. Merge Audits
   const auditMap = new Map<string, AuditRecord>();
   current.audits.forEach((a) => auditMap.set(a.id, a));
   let addedAuditsCount = 0;
@@ -177,14 +194,92 @@ export async function syncCentralDataAsync(
     auditMap.set(a.id, { ...a, synced: true });
   });
 
+  // 3. Merge Custom Categories
+  const categoryMap = new Map<string, CustomCategoryEntry>();
+  (current.customCategories || []).forEach((c) =>
+    categoryMap.set(c.name.trim().toLowerCase(), c)
+  );
+  incomingCategories.forEach((c) => {
+    if (c && c.name) {
+      categoryMap.set(c.name.trim().toLowerCase(), c);
+    }
+  });
+
+  // 4. Merge Custom Brands
+  const brandMap = new Map<string, CustomBrandEntry>();
+  (current.customBrands || []).forEach((b) =>
+    brandMap.set(`${(b.category || "General").toLowerCase()}:::${b.brand.toLowerCase()}`, b)
+  );
+  incomingBrands.forEach((b) => {
+    if (b && b.brand) {
+      const key = `${(b.category || "General").toLowerCase()}:::${b.brand.toLowerCase()}`;
+      const existing = brandMap.get(key);
+      if (existing) {
+        const variants = Array.from(new Set([...existing.variants, ...(b.variants || [])]));
+        const commonSizes = Array.from(new Set([...existing.commonSizes, ...(b.commonSizes || [])]));
+        brandMap.set(key, { ...existing, variants, commonSizes });
+      } else {
+        brandMap.set(key, b);
+      }
+    }
+  });
+
+  // 5. Automatically harvest new categories, brands, variants from all incoming & existing audits!
+  auditMap.forEach((audit) => {
+    if (!audit.category || !audit.brand || audit.brand === "Other") return;
+    const catName = audit.category.trim();
+    const brandName = audit.brand.trim();
+    const catKey = catName.toLowerCase();
+    const brandKey = `${catKey}:::${brandName.toLowerCase()}`;
+
+    // Auto-record category if not standard
+    if (!categoryMap.has(catKey)) {
+      categoryMap.set(catKey, {
+        id: catName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        name: catName,
+        unit: audit.unit || "ml",
+        defaultSizes: audit.packSize ? [audit.packSize] : [100],
+        addedByRep: audit.repName,
+        createdAt: audit.createdAt,
+      });
+    }
+
+    // Auto-record brand & variant
+    const existingBrand = brandMap.get(brandKey);
+    if (existingBrand) {
+      if (audit.variant && !existingBrand.variants.includes(audit.variant.trim())) {
+        existingBrand.variants.push(audit.variant.trim());
+      }
+      if (audit.packSize && !existingBrand.commonSizes.includes(audit.packSize)) {
+        existingBrand.commonSizes.push(audit.packSize);
+        existingBrand.commonSizes.sort((a, b) => a - b);
+      }
+    } else {
+      brandMap.set(brandKey, {
+        brand: brandName,
+        category: catName,
+        variants: audit.variant ? [audit.variant.trim()] : ["Standard"],
+        commonSizes: audit.packSize ? [audit.packSize] : [100],
+        typicalMargin: audit.retailerMarginPct ? Math.round(audit.retailerMarginPct) : 20,
+        unit: audit.unit || "ml",
+        addedByRep: audit.repName,
+        createdAt: audit.createdAt,
+      });
+    }
+  });
+
   const mergedStores = Array.from(storeMap.values());
   const mergedAudits = Array.from(auditMap.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+  const mergedCategories = Array.from(categoryMap.values());
+  const mergedBrands = Array.from(brandMap.values());
 
   const updatedData: CentralData = {
     stores: mergedStores,
     audits: mergedAudits,
+    customCategories: mergedCategories,
+    customBrands: mergedBrands,
     lastUpdated: new Date().toISOString(),
   };
 
@@ -193,6 +288,8 @@ export async function syncCentralDataAsync(
   return {
     audits: mergedAudits,
     stores: mergedStores,
+    categories: mergedCategories,
+    brands: mergedBrands,
     addedAuditsCount,
     addedStoresCount,
   };

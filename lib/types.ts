@@ -51,6 +51,27 @@ export interface ProductCategoryConfig {
   }[];
 }
 
+export interface CustomBrandEntry {
+  brand: string;
+  category: string; // Category Name or Category ID
+  variants: string[];
+  commonSizes: number[];
+  typicalMargin: number;
+  unit?: UnitType;
+  addedByRep?: string;
+  createdAt?: string;
+}
+
+export interface CustomCategoryEntry {
+  id: string;
+  name: string;
+  unit: UnitType;
+  unitStepLabel?: string;
+  defaultSizes?: number[];
+  addedByRep?: string;
+  createdAt?: string;
+}
+
 export interface AuditRecord {
   id: string;
   category: string;

@@ -8,7 +8,7 @@ import ShopsDirectory from "@/components/ShopsDirectory";
 import AuditList from "@/components/AuditList";
 import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 import ExportDataView from "@/components/ExportDataView";
-import { AuditRecord, Store } from "@/lib/types";
+import { AuditRecord, Store, CustomBrandEntry, CustomCategoryEntry } from "@/lib/types";
 import {
   deleteAudit,
   getAudits,
@@ -16,6 +16,10 @@ import {
   saveAudit,
   saveStore,
   syncWithCentralRepo,
+  getCustomCategories,
+  saveCustomCategory,
+  getCustomBrands,
+  saveCustomBrand,
 } from "@/lib/storage";
 import { UserCheck, Sparkles, ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 
@@ -23,6 +27,8 @@ export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>("audit");
   const [stores, setStores] = useState<Store[]>([]);
   const [allAudits, setAllAudits] = useState<AuditRecord[]>([]);
+  const [customCategories, setCustomCategories] = useState<CustomCategoryEntry[]>([]);
+  const [customBrands, setCustomBrands] = useState<CustomBrandEntry[]>([]);
   const [repName, setRepName] = useState<string>("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [tempRepInput, setTempRepInput] = useState("");
@@ -43,14 +49,18 @@ export default function Home() {
     }
     setStores(getStores());
     setAllAudits(getAudits());
+    setCustomCategories(getCustomCategories());
+    setCustomBrands(getCustomBrands());
     setIsLoaded(true);
 
-    // Auto-fetch latest audits from Central Server on load
+    // Auto-fetch latest audits & network catalog from Central Server on load
     if (savedRep.trim()) {
       syncWithCentralRepo(savedRep.trim(), false).then((res) => {
         if (res.success) {
           setAllAudits(res.audits);
           setStores(res.stores);
+          if (res.categories) setCustomCategories(res.categories);
+          if (res.brands) setCustomBrands(res.brands);
         }
       }).catch((err) => console.warn("Background initial sync failed:", err));
     }
@@ -76,6 +86,8 @@ export default function Home() {
       if (res.success) {
         setAllAudits(res.audits);
         setStores(res.stores);
+        if (res.categories) setCustomCategories(res.categories);
+        if (res.brands) setCustomBrands(res.brands);
       }
     }).catch((err) => console.warn("Onboarding sync failed:", err));
   };
@@ -115,6 +127,26 @@ export default function Home() {
         }
       })
       .catch((err) => console.warn("Auto-sync audit failed:", err));
+  };
+
+  const handleAddCustomCategory = (cat: CustomCategoryEntry) => {
+    const updated = saveCustomCategory(cat);
+    setCustomCategories(updated);
+    syncWithCentralRepo(repName, false)
+      .then((res) => {
+        if (res.success && res.categories) setCustomCategories(res.categories);
+      })
+      .catch((err) => console.warn("Sync category failed:", err));
+  };
+
+  const handleAddCustomBrand = (brand: CustomBrandEntry) => {
+    const updated = saveCustomBrand(brand);
+    setCustomBrands(updated);
+    syncWithCentralRepo(repName, false)
+      .then((res) => {
+        if (res.success && res.brands) setCustomBrands(res.brands);
+      })
+      .catch((err) => console.warn("Sync brand failed:", err));
   };
 
   const handleDeleteAudit = (id: string) => {
@@ -234,6 +266,11 @@ export default function Home() {
             onSubmitAudit={handleSubmitAudit}
             repName={repName}
             preselectedStoreId={preselectedStoreId}
+            customCategories={customCategories}
+            customBrands={customBrands}
+            onAddCustomCategory={handleAddCustomCategory}
+            onAddCustomBrand={handleAddCustomBrand}
+            allAudits={allAudits}
           />
         )}
 

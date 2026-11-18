@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import {
   AuditRecord,
+  CustomBrandEntry,
+  CustomCategoryEntry,
   PRODUCT_CATEGORIES,
   ProductCategoryConfig,
   ShelfPosition,
@@ -30,7 +32,7 @@ import {
   TurnoverSpeed,
   UnitType,
 } from "@/lib/types";
-import { compressImage } from "@/lib/storage";
+import { compressImage, buildMergedProductCategories } from "@/lib/storage";
 
 interface AuditFormProps {
   stores: Store[];
@@ -38,6 +40,11 @@ interface AuditFormProps {
   onSubmitAudit: (audit: AuditRecord) => void;
   repName: string;
   preselectedStoreId?: string;
+  customCategories?: CustomCategoryEntry[];
+  customBrands?: CustomBrandEntry[];
+  onAddCustomCategory?: (cat: CustomCategoryEntry) => void;
+  onAddCustomBrand?: (brand: CustomBrandEntry) => void;
+  allAudits?: AuditRecord[];
 }
 
 const COMMON_TAGS = [
@@ -82,6 +89,11 @@ export default function AuditForm({
   onSubmitAudit,
   repName,
   preselectedStoreId,
+  customCategories = [],
+  customBrands = [],
+  onAddCustomCategory,
+  onAddCustomBrand,
+  allAudits = [],
 }: AuditFormProps) {
   // Store Selection State
   const [selectedStoreId, setSelectedStoreId] = useState<string>(
@@ -205,24 +217,49 @@ export default function AuditForm({
     return list;
   }, [stores, storeSearchQuery, searchDistrict, searchChannel, sortByProximity, userLocation]);
 
-  // Category State
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategoryConfig>(
-    PRODUCT_CATEGORIES[0]
+  // Dynamically build categories combining built-in categories, custom categories, custom brands, and audits
+  const availableCategories = useMemo(() => {
+    return buildMergedProductCategories(customCategories, customBrands, allAudits);
+  }, [customCategories, customBrands, allAudits]);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
+    availableCategories[0]?.id || "hair-spray"
   );
+
+  const selectedCategory =
+    availableCategories.find((c) => c.id === selectedCategoryId) ||
+    availableCategories[0] ||
+    PRODUCT_CATEGORIES[0];
+
   const [customCategoryName, setCustomCategoryName] = useState("");
+
+  // Modal State for Registering New Category
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatUnit, setNewCatUnit] = useState<UnitType>("ml");
+  const [newCatSizes, setNewCatSizes] = useState("50, 100, 200");
+
+  // Modal State for Registering New Brand
+  const [showNewBrandModal, setShowNewBrandModal] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandCategory, setNewBrandCategory] = useState("");
+  const [newBrandVariants, setNewBrandVariants] = useState("");
+  const [newBrandSizes, setNewBrandSizes] = useState("100, 200");
+  const [newBrandMargin, setNewBrandMargin] = useState("20");
+  const [newBrandUnit, setNewBrandUnit] = useState<UnitType>("ml");
 
   // Product / Competitor State
   const [selectedBrand, setSelectedBrand] = useState<string>(
-    PRODUCT_CATEGORIES[0].brands[0]?.brand || "Other"
+    availableCategories[0]?.brands[0]?.brand || "Other"
   );
   const [customBrand, setCustomBrand] = useState<string>("");
   const [variant, setVariant] = useState<string>(
-    PRODUCT_CATEGORIES[0].brands[0]?.variants[0] || "Standard"
+    availableCategories[0]?.brands[0]?.variants[0] || "Standard"
   );
   const [packSize, setPackSize] = useState<number>(
-    PRODUCT_CATEGORIES[0].defaultSizes[0] || 100
+    availableCategories[0]?.defaultSizes[0] || 100
   );
-  const [unit, setUnit] = useState<UnitType>(PRODUCT_CATEGORIES[0].unit);
+  const [unit, setUnit] = useState<UnitType>(availableCategories[0]?.unit || "ml");
   const [customPackSize, setCustomPackSize] = useState<string>("");
 
   // Brand Search & Modal State (matching store selector pattern)
@@ -242,7 +279,7 @@ export default function AuditForm({
       typicalMargin: number;
       unit: UnitType;
     }[] = [];
-    PRODUCT_CATEGORIES.forEach((cat) => {
+    availableCategories.forEach((cat) => {
       cat.brands.forEach((b) => {
         list.push({
           ...b,
@@ -253,7 +290,7 @@ export default function AuditForm({
       });
     });
     return list;
-  }, []);
+  }, [availableCategories]);
 
   // Filtered brands for brand search modal
   const searchFilteredBrands = useMemo(() => {
@@ -273,11 +310,89 @@ export default function AuditForm({
     });
   }, [allCatalogBrands, brandSearchQuery, brandSearchCategoryFilter]);
 
+  // Handle Add New Category
+  const handleCreateCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    const cleanName = newCatName.trim();
+    const sizes = newCatSizes
+      .split(",")
+      .map((s) => parseFloat(s.trim()))
+      .filter((s) => !isNaN(s) && s > 0);
+
+    const newCat: CustomCategoryEntry = {
+      id: cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name: cleanName,
+      unit: newCatUnit,
+      unitStepLabel: `per 100${newCatUnit}`,
+      defaultSizes: sizes.length ? sizes : [50, 100, 200],
+      addedByRep: repName || "Field Sales Rep",
+      createdAt: new Date().toISOString(),
+    };
+
+    if (onAddCustomCategory) {
+      onAddCustomCategory(newCat);
+    }
+    setSelectedCategoryId(newCat.id);
+    setUnit(newCat.unit);
+    setShowNewCategoryModal(false);
+    setNewCatName("");
+    setNewCatSizes("50, 100, 200");
+  };
+
+  // Handle Add New Brand
+  const handleCreateBrand = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+    const cleanBrand = newBrandName.trim();
+    const variantsList = newBrandVariants
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    const sizesList = newBrandSizes
+      .split(",")
+      .map((s) => parseFloat(s.trim()))
+      .filter((s) => !isNaN(s) && s > 0);
+
+    const targetCategoryName = newBrandCategory.trim() || selectedCategory.name;
+
+    const brandEntry: CustomBrandEntry = {
+      brand: cleanBrand,
+      category: targetCategoryName,
+      variants: variantsList.length ? variantsList : ["Standard"],
+      commonSizes: sizesList.length ? sizesList : [100],
+      typicalMargin: parseFloat(newBrandMargin) || 20,
+      unit: newBrandUnit || selectedCategory.unit,
+      addedByRep: repName || "Field Sales Rep",
+      createdAt: new Date().toISOString(),
+    };
+
+    if (onAddCustomBrand) {
+      onAddCustomBrand(brandEntry);
+    }
+
+    const targetCat = availableCategories.find(
+      (c) => c.name.toLowerCase() === targetCategoryName.toLowerCase()
+    );
+    if (targetCat) {
+      setSelectedCategoryId(targetCat.id);
+      setUnit(targetCat.unit);
+    }
+    setSelectedBrand(cleanBrand);
+    setVariant(brandEntry.variants[0] || "Standard");
+    setPackSize(brandEntry.commonSizes[0] || 100);
+    setCustomPackSize("");
+    setShowNewBrandModal(false);
+    setShowBrandSearchModal(false);
+    setNewBrandName("");
+    setNewBrandVariants("");
+  };
+
   // Select brand from search modal
   const handleSelectBrandFromModal = (item: (typeof allCatalogBrands)[0]) => {
-    const targetCat = PRODUCT_CATEGORIES.find((c) => c.id === item.categoryId);
+    const targetCat = availableCategories.find((c) => c.id === item.categoryId);
     if (targetCat) {
-      setSelectedCategory(targetCat);
+      setSelectedCategoryId(targetCat.id);
       setUnit(targetCat.unit);
     }
     setSelectedBrand(item.brand);
@@ -330,7 +445,7 @@ export default function AuditForm({
 
   // Handle Category Change
   const handleSelectCategory = (cat: ProductCategoryConfig) => {
-    setSelectedCategory(cat);
+    setSelectedCategoryId(cat.id);
     setUnit(cat.unit);
     const firstBrand = cat.brands[0];
     if (firstBrand) {
@@ -491,6 +606,37 @@ export default function AuditForm({
     };
 
     onSubmitAudit(newAudit);
+
+    // Auto-save brand, variant & category to Network Catalog so entire network has it
+    if (onAddCustomBrand && finalBrand && finalBrand !== "Other") {
+      onAddCustomBrand({
+        brand: finalBrand,
+        category: finalCategory,
+        variants: variant ? [variant] : ["Standard"],
+        commonSizes: [finalSize],
+        typicalMargin: Math.round(marginPct) || 20,
+        unit: unit,
+        addedByRep: repName || "Field Sales Rep",
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (onAddCustomCategory && finalCategory) {
+      const exists = availableCategories.some(
+        (c) => c.name.toLowerCase() === finalCategory.toLowerCase()
+      );
+      if (!exists) {
+        onAddCustomCategory({
+          id: finalCategory.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          name: finalCategory,
+          unit: unit,
+          defaultSizes: [finalSize],
+          addedByRep: repName || "Field Sales Rep",
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
     setSubmittedSuccess(true);
     setPhotoData(null);
     setSelectedTags([]);
@@ -527,14 +673,24 @@ export default function AuditForm({
       <form onSubmit={handleSubmitAudit} className="space-y-4">
         {/* SECTION 1: PRODUCT CATEGORY SELECTION */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 block flex items-center space-x-1.5">
-            <Package className="w-3.5 h-3.5 text-blue-600" />
-            <span>1. Product Category Being Launched / Audited</span>
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+              <Package className="w-3.5 h-3.5 text-blue-600" />
+              <span>1. Product Category Being Launched / Audited</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowNewCategoryModal(true)}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ New Category</span>
+            </button>
+          </div>
 
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {PRODUCT_CATEGORIES.map((cat) => {
-              const active = selectedCategory.id === cat.id;
+            {availableCategories.map((cat) => {
+              const active = selectedCategoryId === cat.id;
               return (
                 <button
                   key={cat.id}
@@ -660,14 +816,14 @@ export default function AuditForm({
             <button
               type="button"
               onClick={() => {
-                setSelectedBrand("Other");
-                setVariant("");
-                setCustomBrand("");
+                setNewBrandCategory(selectedCategory.name);
+                setNewBrandUnit(selectedCategory.unit);
+                setShowNewBrandModal(true);
               }}
               className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Custom Brand</span>
+              <span>+ Add Brand</span>
             </button>
           </div>
 
@@ -1324,12 +1480,15 @@ export default function AuditForm({
                   <button
                     type="button"
                     onClick={() => {
-                      handleUseCustomBrand(brandSearchQuery.trim());
+                      setNewBrandName(brandSearchQuery.trim());
+                      setNewBrandCategory(selectedCategory.name);
+                      setNewBrandUnit(selectedCategory.unit);
+                      setShowNewBrandModal(true);
                     }}
                     className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1.5 rounded-lg flex items-center space-x-1 shadow-xs"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>+ Custom Brand</span>
+                    <span>+ New Brand</span>
                   </button>
                   <button
                     type="button"
@@ -1373,7 +1532,7 @@ export default function AuditForm({
                     className="bg-transparent text-[11px] font-bold text-slate-800 focus:outline-hidden cursor-pointer"
                   >
                     <option value="All">All Categories ({allCatalogBrands.length})</option>
-                    {PRODUCT_CATEGORIES.map((c) => (
+                    {availableCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.brands.length})
                       </option>
@@ -1493,11 +1652,16 @@ export default function AuditForm({
               </span>
               <button
                 type="button"
-                onClick={() => handleUseCustomBrand(brandSearchQuery.trim())}
+                onClick={() => {
+                  setNewBrandName(brandSearchQuery.trim());
+                  setNewBrandCategory(selectedCategory.name);
+                  setNewBrandUnit(selectedCategory.unit);
+                  setShowNewBrandModal(true);
+                }}
                 className="font-bold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Custom Brand</span>
+                <span>+ Add Brand</span>
               </button>
             </div>
           </div>
@@ -1631,6 +1795,207 @@ export default function AuditForm({
                   className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg"
                 >
                   Add &amp; Select
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD PRODUCT CATEGORY TO NETWORK */}
+      {showNewCategoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <Package className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Add Category to Network</h3>
+                  <p className="text-[10px] text-slate-500">Available to all sales reps on every device</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewCategoryModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateCategory} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Category Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="e.g. Bath Soap, Toothpaste, Energy Drinks"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Unit of Measure *
+                </label>
+                <select
+                  value={newCatUnit}
+                  onChange={(e) => setNewCatUnit(e.target.value as UnitType)}
+                  className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-2 font-semibold"
+                >
+                  {UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Common Pack Sizes (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={newCatSizes}
+                  onChange={(e) => setNewCatSizes(e.target.value)}
+                  placeholder="e.g. 50, 100, 150, 250"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-medium"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewCategoryModal(false)}
+                  className="text-xs px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow-xs"
+                >
+                  Save Category to Network
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD BRAND TO NETWORK */}
+      {showNewBrandModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Add Brand to Network</h3>
+                  <p className="text-[10px] text-slate-500">Every sales rep can search &amp; select this brand</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewBrandModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateBrand} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Competitor Brand Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newBrandName}
+                  onChange={(e) => setNewBrandName(e.target.value)}
+                  placeholder="e.g. Livon, Streax, Biotique, Mamaearth"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Product Category *
+                </label>
+                <select
+                  value={newBrandCategory || selectedCategory.name}
+                  onChange={(e) => setNewBrandCategory(e.target.value)}
+                  className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-2 font-semibold"
+                >
+                  {availableCategories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Variants / Formulations (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={newBrandVariants}
+                  onChange={(e) => setNewBrandVariants(e.target.value)}
+                  placeholder="e.g. Keratin Smooth, Damage Protection, Herbal"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Typical Margin %
+                  </label>
+                  <input
+                    type="number"
+                    value={newBrandMargin}
+                    onChange={(e) => setNewBrandMargin(e.target.value)}
+                    placeholder="e.g. 25"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Sizes ({selectedCategory.unit})
+                  </label>
+                  <input
+                    type="text"
+                    value={newBrandSizes}
+                    onChange={(e) => setNewBrandSizes(e.target.value)}
+                    placeholder="e.g. 100, 200"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewBrandModal(false)}
+                  className="text-xs px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow-xs"
+                >
+                  Save Brand to Network
                 </button>
               </div>
             </form>

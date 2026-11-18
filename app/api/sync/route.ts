@@ -25,10 +25,12 @@ export async function GET(req: NextRequest) {
         totalStores: allStores.length,
         audits: allAudits,
         stores: allStores,
+        categories: centralData.customCategories || [],
+        brands: centralData.customBrands || [],
       });
     }
 
-    // Sales person ONLY sees their own audits
+    // Sales person ONLY sees their own audits, but gets all stores, categories & brands
     const myAudits = repName
       ? allAudits.filter((a) => a.repName.trim().toLowerCase() === repName)
       : [];
@@ -40,6 +42,8 @@ export async function GET(req: NextRequest) {
       totalStores: allStores.length,
       audits: myAudits,
       stores: allStores,
+      categories: centralData.customCategories || [],
+      brands: centralData.customBrands || [],
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -49,17 +53,24 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Receive batch of new audits & shops, and return authorized scope
+// POST: Receive batch of new audits, shops, custom categories & brands, and return authorized scope
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const incomingAudits = body.audits || [];
     const incomingStores = body.stores || [];
+    const incomingCategories = body.categories || [];
+    const incomingBrands = body.brands || [];
     const isAdmin = body.isAdmin === true;
     const repName = (body.repName || "").trim().toLowerCase();
 
     // Merge into central repository
-    const result = await syncCentralDataAsync(incomingAudits, incomingStores);
+    const result = await syncCentralDataAsync(
+      incomingAudits,
+      incomingStores,
+      incomingCategories,
+      incomingBrands
+    );
 
     // If Admin, return full global organization data
     if (isAdmin) {
@@ -73,10 +84,12 @@ export async function POST(req: NextRequest) {
         totalStores: result.stores.length,
         audits: result.audits,
         stores: result.stores,
+        categories: result.categories,
+        brands: result.brands,
       });
     }
 
-    // If Sales Person, return ONLY their own audits
+    // If Sales Person, return ONLY their own audits, but all stores, categories & brands
     const myAudits = repName
       ? result.audits.filter((a) => a.repName.trim().toLowerCase() === repName)
       : [];
@@ -91,6 +104,8 @@ export async function POST(req: NextRequest) {
       totalStores: result.stores.length,
       audits: myAudits,
       stores: result.stores,
+      categories: result.categories,
+      brands: result.brands,
     });
   } catch (err: any) {
     return NextResponse.json(

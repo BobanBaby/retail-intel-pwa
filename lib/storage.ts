@@ -1,7 +1,208 @@
-import { AuditRecord, Store } from "./types";
+import {
+  AuditRecord,
+  Store,
+  CustomBrandEntry,
+  CustomCategoryEntry,
+  ProductCategoryConfig,
+  PRODUCT_CATEGORIES,
+} from "./types";
 
 const STORES_STORAGE_KEY = "fieldintel_stores_clean_v3";
 const AUDITS_STORAGE_KEY = "fieldintel_audits_clean_v3";
+const CUSTOM_CATEGORIES_KEY = "fieldintel_custom_categories_v3";
+const CUSTOM_BRANDS_KEY = "fieldintel_custom_brands_v3";
+
+export function getCustomCategories(): CustomCategoryEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_CATEGORIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+export function saveCustomCategory(cat: CustomCategoryEntry): CustomCategoryEntry[] {
+  const current = getCustomCategories();
+  const exists = current.find((c) => c.name.trim().toLowerCase() === cat.name.trim().toLowerCase());
+  const updated = exists
+    ? current.map((c) => (c.name.trim().toLowerCase() === cat.name.trim().toLowerCase() ? cat : c))
+    : [...current, cat];
+  if (typeof window !== "undefined") {
+    localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(updated));
+  }
+  return updated;
+}
+
+export function getCustomBrands(): CustomBrandEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_BRANDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+export function saveCustomBrand(brand: CustomBrandEntry): CustomBrandEntry[] {
+  const current = getCustomBrands();
+  const brandKey = `${(brand.category || "General").toLowerCase()}:::${brand.brand.trim().toLowerCase()}`;
+  const existsIndex = current.findIndex(
+    (b) => `${(b.category || "General").toLowerCase()}:::${b.brand.trim().toLowerCase()}` === brandKey
+  );
+
+  let updated: CustomBrandEntry[];
+  if (existsIndex >= 0) {
+    const existing = current[existsIndex];
+    const variants = Array.from(new Set([...existing.variants, ...brand.variants]));
+    const commonSizes = Array.from(new Set([...existing.commonSizes, ...brand.commonSizes]));
+    updated = [...current];
+    updated[existsIndex] = { ...existing, ...brand, variants, commonSizes };
+  } else {
+    updated = [...current, brand];
+  }
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(updated));
+  }
+  return updated;
+}
+
+// Build merged dynamic product categories combining:
+// 1) Base static PRODUCT_CATEGORIES
+// 2) Custom categories added by any rep
+// 3) Custom brands added by any rep
+// 4) Any brand/category/variant harvested from audits
+export function buildMergedProductCategories(
+  customCategories: CustomCategoryEntry[] = [],
+  customBrands: CustomBrandEntry[] = [],
+  audits: AuditRecord[] = []
+): ProductCategoryConfig[] {
+  const catMap = new Map<string, ProductCategoryConfig>();
+
+  PRODUCT_CATEGORIES.forEach((cat) => {
+    catMap.set(cat.name.toLowerCase(), {
+      ...cat,
+      brands: cat.brands.map((b) => ({
+        ...b,
+        variants: [...b.variants],
+        commonSizes: [...b.commonSizes],
+      })),
+    });
+  });
+
+  // 1. Merge custom categories
+  customCategories.forEach((cc) => {
+    if (!cc || !cc.name) return;
+    const key = cc.name.trim().toLowerCase();
+    if (!catMap.has(key)) {
+      catMap.set(key, {
+        id: cc.id || key.replace(/[^a-z0-9]+/g, "-"),
+        name: cc.name.trim(),
+        unit: cc.unit || "ml",
+        unitStepLabel: cc.unitStepLabel || `per 100${cc.unit || "ml"}`,
+        defaultSizes: cc.defaultSizes?.length ? cc.defaultSizes : [50, 100, 200],
+        brands: [],
+      });
+    }
+  });
+
+  // 2. Merge custom brands & variants
+  customBrands.forEach((cb) => {
+    if (!cb || !cb.brand) return;
+    const catName = cb.category || "General FMCG";
+    const catKey = catName.trim().toLowerCase();
+    let cat = catMap.get(catKey);
+    if (!cat) {
+      for (const c of catMap.values()) {
+        if (c.id === cb.category) {
+          cat = c;
+          break;
+        }
+      }
+    }
+    if (!cat) {
+      cat = {
+        id: catKey.replace(/[^a-z0-9]+/g, "-"),
+        name: catName,
+        unit: cb.unit || "ml",
+        unitStepLabel: `per 100${cb.unit || "ml"}`,
+        defaultSizes: cb.commonSizes?.length ? cb.commonSizes : [50, 100, 200],
+        brands: [],
+      };
+      catMap.set(catKey, cat);
+    }
+
+    const existingBrand = cat.brands.find(
+      (b) => b.brand.toLowerCase() === cb.brand.trim().toLowerCase()
+    );
+    if (existingBrand) {
+      (cb.variants || []).forEach((v) => {
+        if (v && !existingBrand.variants.some((ev) => ev.toLowerCase() === v.toLowerCase())) {
+          existingBrand.variants.push(v);
+        }
+      });
+      (cb.commonSizes || []).forEach((s) => {
+        if (s && !existingBrand.commonSizes.includes(s)) {
+          existingBrand.commonSizes.push(s);
+          existingBrand.commonSizes.sort((a, b) => a - b);
+        }
+      });
+    } else {
+      cat.brands.push({
+        brand: cb.brand.trim(),
+        variants: cb.variants?.length ? [...cb.variants] : ["Standard"],
+        commonSizes: cb.commonSizes?.length ? [...cb.commonSizes] : [100],
+        typicalMargin: cb.typicalMargin || 20,
+      });
+    }
+  });
+
+  // 3. Harvest any new categories, brands, variants from all recorded audits across the network
+  audits.forEach((audit) => {
+    if (!audit.category || !audit.brand || audit.brand === "Other") return;
+    const catKey = audit.category.trim().toLowerCase();
+    let cat = catMap.get(catKey);
+    if (!cat) {
+      cat = {
+        id: catKey.replace(/[^a-z0-9]+/g, "-"),
+        name: audit.category.trim(),
+        unit: audit.unit || "ml",
+        unitStepLabel: `per 100${audit.unit || "ml"}`,
+        defaultSizes: audit.packSize ? [audit.packSize] : [100],
+        brands: [],
+      };
+      catMap.set(catKey, cat);
+    }
+
+    const brandName = audit.brand.trim();
+    let brandConfig = cat.brands.find(
+      (b) => b.brand.toLowerCase() === brandName.toLowerCase()
+    );
+    if (!brandConfig) {
+      brandConfig = {
+        brand: brandName,
+        variants: audit.variant ? [audit.variant.trim()] : ["Standard"],
+        commonSizes: audit.packSize ? [audit.packSize] : [100],
+        typicalMargin: audit.retailerMarginPct ? Math.round(audit.retailerMarginPct) : 20,
+      };
+      cat.brands.push(brandConfig);
+    } else {
+      if (
+        audit.variant &&
+        !brandConfig.variants.some((v) => v.toLowerCase() === audit.variant.trim().toLowerCase())
+      ) {
+        brandConfig.variants.push(audit.variant.trim());
+      }
+      if (audit.packSize && !brandConfig.commonSizes.includes(audit.packSize)) {
+        brandConfig.commonSizes.push(audit.packSize);
+        brandConfig.commonSizes.sort((a, b) => a - b);
+      }
+    }
+  });
+
+  return Array.from(catMap.values());
+}
 
 export function getStores(): Store[] {
   if (typeof window === "undefined") return [];
@@ -71,10 +272,14 @@ export async function syncWithCentralRepo(
   success: boolean;
   audits: AuditRecord[];
   stores: Store[];
+  categories: CustomCategoryEntry[];
+  brands: CustomBrandEntry[];
   message: string;
 }> {
   const localAudits = getAudits();
   const localStores = getStores();
+  const localCategories = getCustomCategories();
+  const localBrands = getCustomBrands();
 
   try {
     const res = await fetch("/api/sync", {
@@ -83,6 +288,8 @@ export async function syncWithCentralRepo(
       body: JSON.stringify({
         audits: localAudits,
         stores: localStores,
+        categories: localCategories,
+        brands: localBrands,
         repName: repName || "",
         isAdmin: isAdmin,
       }),
@@ -94,11 +301,19 @@ export async function syncWithCentralRepo(
         if (typeof window !== "undefined") {
           localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify(data.audits));
           localStorage.setItem(STORES_STORAGE_KEY, JSON.stringify(data.stores));
+          if (data.categories) {
+            localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(data.categories));
+          }
+          if (data.brands) {
+            localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(data.brands));
+          }
         }
         return {
           success: true,
           audits: data.audits,
           stores: data.stores,
+          categories: data.categories || [],
+          brands: data.brands || [],
           message: isAdmin
             ? `Admin: Synced ${data.totalAudits} total audits across all reps!`
             : `Synced your territory audits to Central Repository!`,
@@ -118,6 +333,8 @@ export async function syncWithCentralRepo(
     success: true,
     audits: updated,
     stores: localStores,
+    categories: localCategories,
+    brands: localBrands,
     message: "Audits marked synced locally.",
   };
 }
