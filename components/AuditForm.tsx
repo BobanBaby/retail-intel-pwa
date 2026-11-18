@@ -1,0 +1,912 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  Camera,
+  CheckCircle2,
+  MapPin,
+  Plus,
+  Store as StoreIcon,
+  X,
+  Sparkles,
+  ChevronRight,
+  TrendingUp,
+  Package,
+} from "lucide-react";
+import {
+  AuditRecord,
+  PRODUCT_CATEGORIES,
+  ProductCategoryConfig,
+  ShelfPosition,
+  Store,
+  StoreType,
+  TurnoverSpeed,
+  UnitType,
+} from "@/lib/types";
+import { compressImage } from "@/lib/storage";
+
+interface AuditFormProps {
+  stores: Store[];
+  onAddStore: (store: Store) => void;
+  onSubmitAudit: (audit: AuditRecord) => void;
+  repName: string;
+  preselectedStoreId?: string;
+}
+
+const COMMON_TAGS = [
+  "Top Category Mover",
+  "Wants Smaller Pocket Pack",
+  "Demands >25% Margin",
+  "Retailer Sells Below MRP",
+  "Active Trade Scheme (Buy 10+1)",
+  "Heavy Walk-in Demand",
+  "Premium Salon / Specialist Pick",
+  "Frequently Out of Stock",
+];
+
+const SHELF_POSITIONS: ShelfPosition[] = [
+  "Eye Level (Prime)",
+  "Top Shelf",
+  "Middle Shelf",
+  "Bottom Shelf",
+  "Behind / On Counter",
+];
+
+const TURNOVER_SPEEDS: TurnoverSpeed[] = [
+  "Fast (>5 units/wk)",
+  "Moderate (2-5 units/wk)",
+  "Slow (<2 units/wk)",
+];
+
+const STORE_TYPES: StoreType[] = [
+  "Salon / Parlour",
+  "Cosmetic Specialist",
+  "Chemist / Pharmacy",
+  "Supermarket / Modern Trade",
+  "Kirana / General Store",
+  "Wholesale / Distributor",
+];
+
+const UNITS: UnitType[] = ["ml", "gm", "pcs / sachet", "kg", "litres"];
+
+export default function AuditForm({
+  stores,
+  onAddStore,
+  onSubmitAudit,
+  repName,
+  preselectedStoreId,
+}: AuditFormProps) {
+  // Store Selection State
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(
+    preselectedStoreId || stores[0]?.id || ""
+  );
+
+  useEffect(() => {
+    if (preselectedStoreId) {
+      setSelectedStoreId(preselectedStoreId);
+    }
+  }, [preselectedStoreId]);
+
+  const [showNewStoreModal, setShowNewStoreModal] = useState(false);
+  const [newStoreName, setNewStoreName] = useState("");
+  const [newStoreType, setNewStoreType] = useState<StoreType>("Salon / Parlour");
+  const [newStoreDistrict, setNewStoreDistrict] = useState("Mumbai City");
+  const [newStoreState, setNewStoreState] = useState("Maharashtra");
+  const [newStoreArea, setNewStoreArea] = useState("");
+
+  // Category State
+  const [selectedCategory, setSelectedCategory] = useState<ProductCategoryConfig>(
+    PRODUCT_CATEGORIES[0]
+  );
+  const [customCategoryName, setCustomCategoryName] = useState("");
+
+  // Product / Competitor State
+  const [selectedBrand, setSelectedBrand] = useState<string>(
+    PRODUCT_CATEGORIES[0].brands[0]?.brand || "Other"
+  );
+  const [customBrand, setCustomBrand] = useState<string>("");
+  const [variant, setVariant] = useState<string>(
+    PRODUCT_CATEGORIES[0].brands[0]?.variants[0] || "Standard"
+  );
+  const [packSize, setPackSize] = useState<number>(
+    PRODUCT_CATEGORIES[0].defaultSizes[0] || 100
+  );
+  const [unit, setUnit] = useState<UnitType>(PRODUCT_CATEGORIES[0].unit);
+  const [customPackSize, setCustomPackSize] = useState<string>("");
+
+  // Pricing State
+  const [mrp, setMrp] = useState<string>("199");
+  const [retailerCost, setRetailerCost] = useState<string>("155");
+  const [customerPrice, setCustomerPrice] = useState<string>("199");
+
+  // Merchandising State
+  const [shelfFacings, setShelfFacings] = useState<number>(6);
+  const [shelfPosition, setShelfPosition] = useState<ShelfPosition>("Eye Level (Prime)");
+  const [turnoverSpeed, setTurnoverSpeed] = useState<TurnoverSpeed>("Fast (>5 units/wk)");
+
+  // Photo & Notes
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [compressingPhoto, setCompressingPhoto] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [notes, setNotes] = useState<string>("");
+
+  // UI Feedback
+  const [submittedSuccess, setSubmittedSuccess] = useState(false);
+
+  // Selected Store Object
+  const currentStore = stores.find((s) => s.id === selectedStoreId) || stores[0];
+
+  // Active Brand in selected category
+  const activeBrandConfig = selectedCategory.brands.find((b) => b.brand === selectedBrand);
+
+  // Handle Category Change
+  const handleSelectCategory = (cat: ProductCategoryConfig) => {
+    setSelectedCategory(cat);
+    setUnit(cat.unit);
+    const firstBrand = cat.brands[0];
+    if (firstBrand) {
+      setSelectedBrand(firstBrand.brand);
+      setVariant(firstBrand.variants[0] || "");
+      const defSize = firstBrand.commonSizes[0] || cat.defaultSizes[0] || 100;
+      setPackSize(defSize);
+      setCustomPackSize("");
+      const estMrp = Math.round(defSize * 1.5);
+      const estCost = Math.round(estMrp * (1 - firstBrand.typicalMargin / 100));
+      setMrp(String(estMrp));
+      setRetailerCost(String(estCost));
+      setCustomerPrice(String(estMrp));
+    } else {
+      setSelectedBrand("Other");
+      setVariant("");
+      setPackSize(cat.defaultSizes[0] || 100);
+      setCustomPackSize("");
+    }
+  };
+
+  // Handle Brand Selection
+  const handleSelectBrand = (brandName: string) => {
+    setSelectedBrand(brandName);
+    const bConfig = selectedCategory.brands.find((b) => b.brand === brandName);
+    if (bConfig) {
+      setVariant(bConfig.variants[0] || "");
+      const defSize = bConfig.commonSizes[0] || selectedCategory.defaultSizes[0] || 100;
+      setPackSize(defSize);
+      setCustomPackSize("");
+      const estMrp = Math.round(defSize * 1.5);
+      const estCost = Math.round(estMrp * (1 - bConfig.typicalMargin / 100));
+      setMrp(String(estMrp));
+      setRetailerCost(String(estCost));
+      setCustomerPrice(String(estMrp));
+    }
+  };
+
+  // Compute Margin %
+  const mrpNum = parseFloat(mrp) || 0;
+  const costNum = parseFloat(retailerCost) || 0;
+  const marginPct =
+    mrpNum > 0 && costNum > 0 && mrpNum >= costNum
+      ? ((mrpNum - costNum) / mrpNum) * 100
+      : 0;
+
+  // Unit rate calculation
+  const effectiveSize = packSize === 0 ? parseFloat(customPackSize) || 1 : packSize;
+  const unitRate =
+    effectiveSize > 0 && mrpNum > 0
+      ? ((mrpNum / effectiveSize) * (unit === "kg" || unit === "litres" ? 1 : 100)).toFixed(1)
+      : "0";
+
+  const rateLabel =
+    unit === "ml"
+      ? "per 100ml"
+      : unit === "gm"
+      ? "per 100g"
+      : unit === "kg"
+      ? "per kg"
+      : unit === "litres"
+      ? "per L"
+      : "per unit";
+
+  // Handle Photo Selection
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setCompressingPhoto(true);
+      const compressedBase64 = await compressImage(file);
+      setPhotoData(compressedBase64);
+    } catch (err) {
+      console.error("Photo compression error", err);
+    } finally {
+      setCompressingPhoto(false);
+    }
+  };
+
+  // Toggle Tags
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  // Handle Add New Store
+  const handleCreateStore = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStoreName.trim()) return;
+    const newStore: Store = {
+      id: "str-" + Date.now().toString(36),
+      name: newStoreName.trim(),
+      type: newStoreType,
+      state: newStoreState.trim() || "State",
+      district: newStoreDistrict.trim() || "District",
+      area: newStoreArea.trim() || "Area",
+      addedByRep: repName || "Field Rep",
+      createdAt: new Date().toISOString(),
+    };
+    onAddStore(newStore);
+    setSelectedStoreId(newStore.id);
+    setShowNewStoreModal(false);
+    setNewStoreName("");
+    setNewStoreArea("");
+  };
+
+  // Submit Audit
+  const handleSubmitAudit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentStore) return;
+
+    const finalBrand =
+      selectedBrand === "Other" && customBrand.trim()
+        ? customBrand.trim()
+        : selectedBrand;
+
+    const finalCategory =
+      selectedCategory.id === "general-fmcg" && customCategoryName.trim()
+        ? customCategoryName.trim()
+        : selectedCategory.name;
+
+    const finalSize =
+      packSize === 0 && customPackSize ? parseFloat(customPackSize) || 100 : packSize;
+
+    const newAudit: AuditRecord = {
+      id: "aud-" + Date.now().toString(36),
+      category: finalCategory,
+      storeId: currentStore.id,
+      storeName: currentStore.name,
+      storeType: currentStore.type,
+      state: currentStore.state || "State",
+      district: currentStore.district || "District",
+      area: currentStore.area,
+      repName: repName || "Field Sales Rep",
+      brand: finalBrand,
+      variant: variant || "Standard",
+      packSize: finalSize,
+      unit: unit,
+      mrp: mrpNum,
+      retailerCost: costNum,
+      retailerMarginPct: parseFloat(marginPct.toFixed(2)),
+      customerPrice: parseFloat(customerPrice) || mrpNum,
+      shelfFacings: shelfFacings,
+      shelfPosition: shelfPosition,
+      turnoverSpeed: turnoverSpeed,
+      photoData: photoData || undefined,
+      tags: selectedTags,
+      notes: notes.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      synced: false,
+    };
+
+    onSubmitAudit(newAudit);
+    setSubmittedSuccess(true);
+    setPhotoData(null);
+    setSelectedTags([]);
+    setNotes("");
+
+    setTimeout(() => {
+      setSubmittedSuccess(false);
+    }, 2500);
+  };
+
+  return (
+    <div className="pb-24 max-w-xl mx-auto px-4 pt-3">
+      {/* Success Notification Banner */}
+      {submittedSuccess && (
+        <div className="fixed top-14 left-4 right-4 z-50 max-w-sm mx-auto bg-emerald-600 text-white p-3.5 rounded-xl shadow-xl flex items-center space-x-3 animate-bounce">
+          <CheckCircle2 className="w-6 h-6 text-emerald-200 shrink-0" />
+          <div className="text-xs">
+            <p className="font-bold">Audit Saved Locally!</p>
+            <p className="text-emerald-100">Ready to sync or record next competitor.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Page Title */}
+      <div className="mb-3">
+        <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
+          <span>Retail Competitor Audit</span>
+        </h1>
+        <p className="text-xs text-slate-500">
+          Capture competitor pricing, SKU specs, and wholesale margins in 90 seconds.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmitAudit} className="space-y-4">
+        {/* SECTION 1: PRODUCT CATEGORY SELECTION */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 block flex items-center space-x-1.5">
+            <Package className="w-3.5 h-3.5 text-blue-600" />
+            <span>1. Product Category Being Launched / Audited</span>
+          </label>
+
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {PRODUCT_CATEGORIES.map((cat) => {
+              const active = selectedCategory.id === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => handleSelectCategory(cat)}
+                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition ${
+                    active
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedCategory.id === "general-fmcg" && (
+            <input
+              type="text"
+              value={customCategoryName}
+              onChange={(e) => setCustomCategoryName(e.target.value)}
+              placeholder="Type custom product category (e.g. Toothpaste, Energy Drink, Face Cream)..."
+              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+            />
+          )}
+        </div>
+
+        {/* SECTION 2: STORE / RETAILER SELECTION */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+              <StoreIcon className="w-3.5 h-3.5 text-blue-600" />
+              <span>2. Retail Shop Visited</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowNewStoreModal(true)}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Shop</span>
+            </button>
+          </div>
+
+          <select
+            value={selectedStoreId}
+            onChange={(e) => setSelectedStoreId(e.target.value)}
+            className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden text-slate-900"
+          >
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.district} &bull; {s.area} &bull; {s.type})
+              </option>
+            ))}
+          </select>
+
+          {currentStore && (
+            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+              <span className="font-medium text-slate-700 flex items-center space-x-1">
+                <MapPin className="w-3 h-3 text-slate-400" />
+                <span>
+                  {currentStore.district} &bull; {currentStore.area}
+                </span>
+              </span>
+              <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
+                {currentStore.type}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 3: COMPETITOR BRAND & SKU */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 block flex items-center space-x-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span>3. Competitor Brand &amp; SKU Specs</span>
+          </label>
+
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {selectedCategory.brands.map((item) => {
+              const isSelected = selectedBrand === item.brand;
+              return (
+                <button
+                  key={item.brand}
+                  type="button"
+                  onClick={() => handleSelectBrand(item.brand)}
+                  className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition ${
+                    isSelected
+                      ? "bg-blue-600 text-white shadow-xs font-semibold"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {item.brand}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedBrand("Other");
+                setVariant("");
+              }}
+              className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition ${
+                selectedBrand === "Other"
+                  ? "bg-blue-600 text-white font-semibold"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              + Other Brand
+            </button>
+          </div>
+
+          {selectedBrand === "Other" && (
+            <div className="mb-2.5">
+              <label className="text-xs text-slate-600 font-medium mb-1 block">Brand Name</label>
+              <input
+                type="text"
+                value={customBrand}
+                onChange={(e) => setCustomBrand(e.target.value)}
+                placeholder="Type competitor brand name..."
+                className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                required
+              />
+            </div>
+          )}
+
+          <div className="mb-3">
+            <label className="text-xs text-slate-600 font-medium mb-1 block">Variant / Formulation</label>
+            {activeBrandConfig && activeBrandConfig.variants.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {activeBrandConfig.variants.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setVariant(v)}
+                    className={`text-[11px] px-2 py-1 rounded-md border transition ${
+                      variant === v
+                        ? "bg-slate-900 border-slate-900 text-white font-medium"
+                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              type="text"
+              value={variant}
+              onChange={(e) => setVariant(e.target.value)}
+              placeholder="e.g. Anti-Dandruff, Strong Hold, Deep Clean, Aloe Vera"
+              className="w-full text-xs border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-slate-600 font-medium">Pack Size &amp; Unit</label>
+              <div className="flex items-center space-x-1">
+                {UNITS.map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setUnit(u)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
+                      unit === u
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {selectedCategory.defaultSizes.map((sz) => (
+                <button
+                  key={sz}
+                  type="button"
+                  onClick={() => {
+                    setPackSize(sz);
+                    setCustomPackSize("");
+                  }}
+                  className={`text-xs py-1 px-2.5 rounded-lg font-semibold border transition ${
+                    packSize === sz
+                      ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-xs"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {sz} {unit}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] text-slate-500">Custom size:</span>
+              <input
+                type="number"
+                value={customPackSize}
+                onChange={(e) => {
+                  setCustomPackSize(e.target.value);
+                  setPackSize(0);
+                }}
+                placeholder="e.g. 120"
+                className="w-24 text-xs border border-slate-300 rounded-lg px-2.5 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+              />
+              <span className="text-xs text-slate-500 font-semibold">{unit}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 4: PRICING & RETAILER MARGIN */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 block flex items-center justify-between">
+            <span className="flex items-center space-x-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+              <span>4. Pricing &amp; Trade Margin</span>
+            </span>
+            <span className="text-[11px] text-slate-500 font-normal">
+              Rate: <span className="font-bold text-slate-800">₹{unitRate}</span> {rateLabel}
+            </span>
+          </label>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
+                Printed MRP (₹)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-slate-400 text-sm font-semibold">₹</span>
+                <input
+                  type="number"
+                  value={mrp}
+                  onChange={(e) => setMrp(e.target.value)}
+                  placeholder="199"
+                  className="w-full text-base font-bold text-slate-900 border border-slate-300 rounded-xl pl-7 pr-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
+                Wholesale Landing Cost (₹)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-slate-400 text-sm font-semibold">₹</span>
+                <input
+                  type="number"
+                  value={retailerCost}
+                  onChange={(e) => setRetailerCost(e.target.value)}
+                  placeholder="150"
+                  className="w-full text-base font-bold text-slate-900 border border-slate-300 rounded-xl pl-7 pr-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-medium text-slate-500 block">Retailer Margin</span>
+              <span
+                className={`text-lg font-black tracking-tight ${
+                  marginPct >= 25
+                    ? "text-emerald-600"
+                    : marginPct >= 18
+                    ? "text-blue-600"
+                    : "text-amber-600"
+                }`}
+              >
+                {marginPct.toFixed(1)}%
+              </span>
+              <span className="text-[11px] text-slate-400 ml-1.5">
+                (₹{(mrpNum - costNum).toFixed(0)} / pack)
+              </span>
+            </div>
+
+            <div className="w-1/2">
+              <label className="text-[10px] text-slate-500 font-semibold mb-0.5 block">
+                Selling Price (Retail)
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1 text-slate-400 text-xs">₹</span>
+                <input
+                  type="number"
+                  value={customerPrice}
+                  onChange={(e) => setCustomerPrice(e.target.value)}
+                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg pl-6 pr-2 py-1 text-slate-800"
+                />
+              </div>
+              {parseFloat(customerPrice) < mrpNum && (
+                <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5">
+                  Retailer discounts ₹{(mrpNum - parseFloat(customerPrice)).toFixed(0)} below MRP
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 5: SHELF VISIBILITY */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 block">
+            5. Shelf Visibility &amp; Sales Velocity
+          </label>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
+                Shelf Facings (Front Row)
+              </label>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShelfFacings((c) => Math.max(1, c - 1))}
+                  className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-300 text-slate-700 font-bold text-lg flex items-center justify-center active:bg-slate-200"
+                >
+                  -
+                </button>
+                <span className="flex-1 text-center font-black text-lg text-slate-800">
+                  {shelfFacings}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShelfFacings((c) => c + 1)}
+                  className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-300 text-blue-700 font-bold text-lg flex items-center justify-center active:bg-blue-100"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
+                Turnover Velocity
+              </label>
+              <select
+                value={turnoverSpeed}
+                onChange={(e) => setTurnoverSpeed(e.target.value as TurnoverSpeed)}
+                className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2.5 text-slate-800 focus:outline-hidden"
+              >
+                {TURNOVER_SPEEDS.map((sp) => (
+                  <option key={sp} value={sp}>
+                    {sp}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-slate-600 font-semibold mb-1.5 block">
+              Placement Position
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {SHELF_POSITIONS.map((pos) => (
+                <button
+                  key={pos}
+                  type="button"
+                  onClick={() => setShelfPosition(pos)}
+                  className={`text-[11px] py-1.5 px-2 rounded-lg border font-medium text-left truncate transition ${
+                    shelfPosition === pos
+                      ? "bg-blue-50 border-blue-500 text-blue-700 font-semibold"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 6: CAMERA PHOTO */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 block flex items-center justify-between">
+            <span className="flex items-center space-x-1.5">
+              <Camera className="w-3.5 h-3.5 text-blue-600" />
+              <span>6. Shelf Photo Evidence (Optional)</span>
+            </span>
+            {compressingPhoto && (
+              <span className="text-[11px] text-blue-600 font-semibold animate-pulse">
+                Compressing...
+              </span>
+            )}
+          </label>
+
+          {photoData ? (
+            <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-900 max-h-48 flex items-center justify-center">
+              <img src={photoData} alt="Shelf Audit Preview" className="object-contain max-h-48 w-full" />
+              <button
+                type="button"
+                onClick={() => setPhotoData(null)}
+                className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white p-1 rounded-full transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <label className="border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl p-3.5 flex flex-col items-center justify-center cursor-pointer bg-slate-50 transition">
+              <Camera className="w-6 h-6 text-slate-400 mb-1" />
+              <span className="text-xs font-semibold text-slate-700">Take Photo with Phone Camera</span>
+              <span className="text-[10px] text-slate-400">Auto-compressed on device (&lt;100KB)</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+
+        {/* SECTION 7: FEEDBACK TAGS & NOTES */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 block">
+            7. Retailer Feedback &amp; Trade Schemes
+          </label>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {COMMON_TAGS.map((tag) => {
+              const active = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border transition ${
+                    active
+                      ? "bg-amber-100 border-amber-400 text-amber-900 font-semibold"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Retailer insights (e.g. 'Customer prefers herbal fragrance' or 'Distributor gives ₹20 cash discount per carton')..."
+            rows={2}
+            className="w-full text-xs border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+          />
+        </div>
+
+        {/* SUBMIT BUTTON */}
+        <button
+          type="submit"
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm py-3.5 px-4 rounded-2xl shadow-md transition active:scale-[0.99] flex items-center justify-center space-x-2"
+        >
+          <span>Save Competitor Audit</span>
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </form>
+
+      {/* MODAL: ADD SHOP */}
+      {showNewStoreModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-900">Add New Retail Shop</h3>
+              <button
+                onClick={() => setShowNewStoreModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateStore} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Shop Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  placeholder="e.g. Glamour Unisex Salon"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Channel Type
+                </label>
+                <select
+                  value={newStoreType}
+                  onChange={(e) => setNewStoreType(e.target.value as StoreType)}
+                  className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-2"
+                >
+                  {STORE_TYPES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    District *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newStoreDistrict}
+                    onChange={(e) => setNewStoreDistrict(e.target.value)}
+                    placeholder="e.g. Mumbai City"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    value={newStoreState}
+                    onChange={(e) => setNewStoreState(e.target.value)}
+                    placeholder="e.g. Maharashtra"
+                    className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Area / Street *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newStoreArea}
+                  onChange={(e) => setNewStoreArea(e.target.value)}
+                  placeholder="e.g. Bandra West Hill Rd"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewStoreModal(false)}
+                  className="text-xs px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg"
+                >
+                  Add &amp; Select
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
