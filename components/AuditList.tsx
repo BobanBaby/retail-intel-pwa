@@ -122,7 +122,7 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
                     </div>
                     <p className="text-[11px] text-slate-500 flex items-center space-x-1 mt-0.5">
                       <MapPin className="w-3 h-3 text-slate-400" />
-                      <span>{item.area}, {item.city}</span>
+                      <span>{item.district || item.city || "District"}, {item.area}</span>
                       <span>•</span>
                       <span className="font-medium text-slate-600">{item.storeType}</span>
                     </p>

@@ -14,6 +14,7 @@ export interface Store {
   type: StoreType;
   state: string;
   district: string;
+  city?: string;
   area: string;
   pincode?: string;
   gpsLat?: number;
@@ -58,6 +59,7 @@ export interface AuditRecord {
   storeType: StoreType;
   state: string;
   district: string;
+  city?: string;
   area: string;
   repName: string;
   brand: string;
