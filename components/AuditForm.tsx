@@ -385,30 +385,49 @@ export default function AuditForm({
             </button>
           </div>
 
-          <select
-            value={selectedStoreId}
-            onChange={(e) => setSelectedStoreId(e.target.value)}
-            className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden text-slate-900"
-          >
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.district} &bull; {s.area} &bull; {s.type})
-              </option>
-            ))}
-          </select>
-
-          {currentStore && (
-            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-              <span className="font-medium text-slate-700 flex items-center space-x-1">
-                <MapPin className="w-3 h-3 text-slate-400" />
-                <span>
-                  {currentStore.district} &bull; {currentStore.area}
-                </span>
-              </span>
-              <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
-                {currentStore.type}
-              </span>
+          {stores.length === 0 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+              <p className="text-xs font-bold text-amber-900 mb-1">No Retail Shops Registered Yet</p>
+              <p className="text-[11px] text-amber-700 mb-2">
+                You are starting in clean state. Please register the shop you are visiting.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowNewStoreModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg inline-flex items-center space-x-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Register Shop Now</span>
+              </button>
             </div>
+          ) : (
+            <>
+              <select
+                value={selectedStoreId}
+                onChange={(e) => setSelectedStoreId(e.target.value)}
+                className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden text-slate-900"
+              >
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.district} &bull; {s.area} &bull; {s.type})
+                  </option>
+                ))}
+              </select>
+
+              {currentStore && (
+                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                  <span className="font-medium text-slate-700 flex items-center space-x-1">
+                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <span>
+                      {currentStore.district} &bull; {currentStore.area}
+                    </span>
+                  </span>
+                  <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
+                    {currentStore.type}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -794,9 +813,14 @@ export default function AuditForm({
         {/* SUBMIT BUTTON */}
         <button
           type="submit"
-          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm py-3.5 px-4 rounded-2xl shadow-md transition active:scale-[0.99] flex items-center justify-center space-x-2"
+          disabled={stores.length === 0}
+          className={`w-full font-bold text-sm py-3.5 px-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-2 ${
+            stores.length === 0
+              ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white active:scale-[0.99]"
+          }`}
         >
-          <span>Save Competitor Audit</span>
+          <span>{stores.length === 0 ? "Please Register Shop First" : "Save Competitor Audit"}</span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </form>

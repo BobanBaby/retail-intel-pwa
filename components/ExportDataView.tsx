@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { AuditRecord, Store } from "@/lib/types";
-import { exportAuditsToCSV, resetToSeedData, syncWithCentralRepo } from "@/lib/storage";
+import { exportAuditsToCSV, syncWithCentralRepo } from "@/lib/storage";
 import {
   Download,
   FileSpreadsheet,
@@ -51,14 +51,16 @@ export default function ExportDataView({
     setTimeout(() => setSyncMessage(""), 3500);
   };
 
-  const handleResetData = () => {
+  const handleClearData = () => {
     if (
       confirm(
-        "Are you sure you want to reset all audits and stores to initial factory sample data?"
+        "Are you sure you want to clear your local device storage cache? This will reset your device state."
       )
     ) {
-      resetToSeedData();
-      onReloadData();
+      if (typeof window !== "undefined") {
+        localStorage.clear();
+      }
+      window.location.reload();
     }
   };
 
@@ -185,17 +187,17 @@ export default function ExportDataView({
           </div>
         </div>
 
-        {/* Reset Data Button */}
+        {/* Reset Device Cache */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs text-center">
           <p className="text-xs text-slate-500 mb-2">
-            Want to reset local storage back to default multi-rep seed data?
+            Need to change sales representative identity or clear device cache?
           </p>
           <button
-            onClick={handleResetData}
+            onClick={handleClearData}
             className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center justify-center space-x-1.5 mx-auto py-1 px-3 rounded-lg hover:bg-rose-50 transition"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reload Multi-Rep Sample Seed Data</span>
+            <span>Reset Device Identity &amp; Local Storage</span>
           </button>
         </div>
       </div>

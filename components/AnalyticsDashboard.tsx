@@ -278,10 +278,10 @@ export default function AnalyticsDashboard({
             </span>
           </div>
           <span className="text-xl font-black text-slate-900 truncate block">
-            {topBrand.split(" ")[0]}
+            {totalAudits > 0 ? topBrand.split(" ")[0] : "—"}
           </span>
           <span className="text-[10px] text-slate-400 block mt-0.5">
-            {brandShelfShare[0]?.sharePct}% front shelf
+            {totalAudits > 0 ? `${brandShelfShare[0]?.sharePct}% front shelf` : "No data yet"}
           </span>
         </div>
 
@@ -311,6 +311,16 @@ export default function AnalyticsDashboard({
           </span>
         </div>
       </div>
+
+      {totalAudits === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center mb-4">
+          <Layers className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-slate-700">Clean State — No Audits Yet</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            Zero dummy data loaded. As soon as you visit shops and record competitor products, full market analytics, leaderboards, and price benchmarks will display here!
+          </p>
+        </div>
+      )}
 
       {/* SECTION 1: SALES PERSON-WISE PERFORMANCE LEADERBOARD */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-4">

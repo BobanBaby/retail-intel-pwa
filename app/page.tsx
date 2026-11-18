@@ -17,22 +17,28 @@ import {
   saveStore,
   syncWithCentralRepo,
 } from "@/lib/storage";
+import { UserCheck, Sparkles, ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 
 export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>("audit");
   const [stores, setStores] = useState<Store[]>([]);
   const [allAudits, setAllAudits] = useState<AuditRecord[]>([]);
-  const [repName, setRepName] = useState<string>("Rahul Sharma (Rep)");
+  const [repName, setRepName] = useState<string>("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [tempRepInput, setTempRepInput] = useState("");
   const [preselectedStoreId, setPreselectedStoreId] = useState<string | undefined>(undefined);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  // Initialize data and load rep preference
+  // Initialize data and check if rep name is preset
   useEffect(() => {
+    let savedRep = "";
     if (typeof window !== "undefined") {
-      const savedRep = localStorage.getItem("fieldintel_active_rep");
-      if (savedRep) {
-        setRepName(savedRep);
+      savedRep = localStorage.getItem("fieldintel_active_rep_v3") || "";
+      if (savedRep.trim()) {
+        setRepName(savedRep.trim());
+      } else {
+        setShowOnboarding(true);
       }
     }
     setStores(getStores());
@@ -47,14 +53,25 @@ export default function Home() {
     }
   }, []);
 
+  const handleSaveRepName = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tempRepInput.trim()) return;
+    const cleanName = tempRepInput.trim();
+    setRepName(cleanName);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("fieldintel_active_rep_v3", cleanName);
+    }
+    setShowOnboarding(false);
+  };
+
   const handleSetRepName = (name: string) => {
     setRepName(name);
     if (typeof window !== "undefined") {
-      localStorage.setItem("fieldintel_active_rep", name);
+      localStorage.setItem("fieldintel_active_rep_v3", name);
     }
   };
 
-  // PRIVACY CONTROL: Sales person ONLY sees their own submitted audits!
+  // PRIVACY: Sales rep ONLY sees their own audits!
   const myAudits = allAudits.filter(
     (a) => a.repName.trim().toLowerCase() === repName.trim().toLowerCase()
   );
@@ -101,7 +118,57 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
         <div className="flex flex-col items-center space-y-3">
           <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-semibold tracking-wide">Loading FieldIntel PWA...</p>
+          <p className="text-sm font-semibold tracking-wide">Loading FieldIntel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // MANDATORY ONBOARDING SCREEN: If rep name is not preset, ask before entering app!
+  if (showOnboarding) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4 font-sans text-white">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center mx-auto mb-4 font-black text-xl shadow-lg">
+            FI
+          </div>
+
+          <h2 className="text-xl font-black tracking-tight mb-1">
+            Welcome to FieldIntel
+          </h2>
+          <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+            Retail Competitor Audit PWA. Please enter your name to personalize your territory data.
+          </p>
+
+          <form onSubmit={handleSaveRepName} className="space-y-4">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-300 block text-left mb-1.5">
+                Your Full Name or Employee ID *
+              </label>
+              <input
+                type="text"
+                required
+                value={tempRepInput}
+                onChange={(e) => setTempRepInput(e.target.value)}
+                placeholder="e.g. John Doe / Rep #104"
+                className="w-full text-sm font-semibold bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                autoFocus
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm py-3.5 rounded-xl transition shadow-md flex items-center justify-center space-x-2"
+            >
+              <span>Start Field Survey</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+
+          <div className="mt-6 pt-4 border-t border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-center space-x-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Clean State &bull; Zero dummy data &bull; Stored locally</span>
+          </div>
         </div>
       </div>
     );
@@ -126,7 +193,7 @@ export default function Home() {
 
       {/* Rep Privacy Notice Banner */}
       <div className="bg-blue-50/80 border-b border-blue-100 px-4 py-1.5 text-center text-[11px] text-blue-700 font-medium">
-        Logged in as <strong className="font-bold">{repName}</strong> &bull; Showing only your assigned territory data
+        Sales Rep: <strong className="font-bold">{repName}</strong> &bull; Clean Territory View
       </div>
 
       {/* Main View Area */}

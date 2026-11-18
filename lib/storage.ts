@@ -1,21 +1,20 @@
 import { AuditRecord, Store } from "./types";
-import { INITIAL_AUDITS, INITIAL_STORES } from "./seedData";
 
-const STORES_STORAGE_KEY = "fieldintel_stores_v2";
-const AUDITS_STORAGE_KEY = "fieldintel_audits_v2";
+const STORES_STORAGE_KEY = "fieldintel_stores_clean_v3";
+const AUDITS_STORAGE_KEY = "fieldintel_audits_clean_v3";
 
 export function getStores(): Store[] {
-  if (typeof window === "undefined") return INITIAL_STORES;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORES_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORES_STORAGE_KEY, JSON.stringify(INITIAL_STORES));
-      return INITIAL_STORES;
+      localStorage.setItem(STORES_STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     return JSON.parse(raw);
   } catch (err) {
     console.error("Failed to load stores from storage", err);
-    return INITIAL_STORES;
+    return [];
   }
 }
 
@@ -32,17 +31,17 @@ export function saveStore(store: Store): Store[] {
 }
 
 export function getAudits(): AuditRecord[] {
-  if (typeof window === "undefined") return INITIAL_AUDITS;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(AUDITS_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify(INITIAL_AUDITS));
-      return INITIAL_AUDITS;
+      localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     return JSON.parse(raw);
   } catch (err) {
     console.error("Failed to load audits from storage", err);
-    return INITIAL_AUDITS;
+    return [];
   }
 }
 
@@ -95,7 +94,7 @@ export async function syncWithCentralRepo(): Promise<{
           success: true,
           audits: data.audits,
           stores: data.stores,
-          message: `Synced ${localAudits.filter((a) => !a.synced).length} records to central repository!`,
+          message: `Synced with Central Server successfully!`,
         };
       }
     }
@@ -116,10 +115,11 @@ export async function syncWithCentralRepo(): Promise<{
   };
 }
 
-export function resetToSeedData(): void {
+export function clearAllLocalData(): void {
   if (typeof window !== "undefined") {
-    localStorage.setItem(STORES_STORAGE_KEY, JSON.stringify(INITIAL_STORES));
-    localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify(INITIAL_AUDITS));
+    localStorage.removeItem(STORES_STORAGE_KEY);
+    localStorage.removeItem(AUDITS_STORAGE_KEY);
+    localStorage.removeItem("fieldintel_active_rep_v3");
   }
 }
 
@@ -230,7 +230,7 @@ export function exportAuditsToCSV(audits: AuditRecord[]): void {
   const encodedUri = encodeURI(csvContent);
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `central_retail_audit_${new Date().toISOString().slice(0, 10)}.csv`);
+  link.setAttribute("download", `retail_competitor_audit_${new Date().toISOString().slice(0, 10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
