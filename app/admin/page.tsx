@@ -150,45 +150,26 @@ export default function AdminPage() {
   const loadAdminData = async () => {
     try {
       setSyncing(true);
-      // 1. Sync any local device audits & shops to the central server with isAdmin: true
-      const syncResult = await syncWithCentralRepo("", true);
-      if (syncResult && syncResult.audits && syncResult.audits.length > 0) {
-        setAudits(syncResult.audits);
-        setStores(syncResult.stores);
-        setCustomCategories(syncResult.categories || []);
-        setCustomBrands(syncResult.brands || []);
-      } else {
-        // 2. Fetch directly from central server API
-        const res = await fetch("/api/sync?isAdmin=true");
-        if (res.ok) {
-          const data = await res.json();
-          const serverAudits = data.audits || [];
-          const localAudits = getAudits();
-          const auditMap = new Map();
-          localAudits.forEach((a) => auditMap.set(a.id, a));
-          serverAudits.forEach((a: any) => auditMap.set(a.id, a));
-          const mergedAudits = Array.from(auditMap.values());
-          setAudits(mergedAudits);
+      // 1. Sync any local audits or shops on this device with admin scope
+      await syncWithCentralRepo("", true);
 
-          const serverStores = data.stores || [];
-          const localStores = getStores();
-          const storeMap = new Map();
-          localStores.forEach((s) => storeMap.set(s.id, s));
-          serverStores.forEach((s: any) => storeMap.set(s.id, s));
-          setStores(Array.from(storeMap.values()));
-
-          setCustomCategories(data.categories || getCustomCategories());
-          setCustomBrands(data.brands || getCustomBrands());
-          if (data.adminPin) {
-            setAdminPinState(data.adminPin);
-          }
-        } else {
-          setAudits(getAudits());
-          setStores(getStores());
-          setCustomCategories(getCustomCategories());
-          setCustomBrands(getCustomBrands());
-          setAdminPinState(getAdminPin());
+      // 2. Fetch authoritative central repository data for Admin
+      const res = await fetch("/api/sync?isAdmin=true");
+      if (res.ok) {
+        const data = await res.json();
+        setAudits(data.audits || []);
+        setStores(data.stores || []);
+        setCustomCategories(data.categories || []);
+        setCustomBrands(data.brands || []);
+        if (data.adminPin) {
+          setAdminPinState(data.adminPin);
         }
+      } else {
+        setAudits(getAudits());
+        setStores(getStores());
+        setCustomCategories(getCustomCategories());
+        setCustomBrands(getCustomBrands());
+        setAdminPinState(getAdminPin());
       }
     } catch (err) {
       console.error("Failed to load admin data:", err);
@@ -234,6 +215,28 @@ export default function AdminPage() {
     setCustomBrands(getCustomBrands());
     setIsLoaded(true);
   }, []);
+
+  // Real-time live polling: Keep admin data in sync with field sales reps automatically
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetch("/api/sync?isAdmin=true")
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data && data.audits) {
+              setAudits(data.audits);
+              setStores(data.stores);
+              if (data.categories) setCustomCategories(data.categories);
+              if (data.brands) setCustomBrands(data.brands);
+              if (data.adminPin) setAdminPinState(data.adminPin);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,12 +288,22 @@ export default function AdminPage() {
 
   const handleSyncData = async () => {
     setSyncing(true);
-    const res = await syncWithCentralRepo("", true);
-    setAudits(res.audits);
-    setStores(res.stores);
-    setCustomCategories(res.categories);
-    setCustomBrands(res.brands);
-    setSyncing(false);
+    try {
+      await syncWithCentralRepo("", true);
+      const res = await fetch("/api/sync?isAdmin=true");
+      if (res.ok) {
+        const data = await res.json();
+        setAudits(data.audits || []);
+        setStores(data.stores || []);
+        setCustomCategories(data.categories || []);
+        setCustomBrands(data.brands || []);
+        if (data.adminPin) setAdminPinState(data.adminPin);
+      }
+    } catch (e) {
+      console.warn("handleSyncData error:", e);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleExportCSV = () => {

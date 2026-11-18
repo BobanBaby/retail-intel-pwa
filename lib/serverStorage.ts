@@ -23,9 +23,46 @@ let memoryCache: CentralData | null = null;
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
-// Public free cloud KV fallback key (unique to this repo so mobile and laptop share it automatically on Vercel!)
-const CLOUD_FALLBACK_API = "https://api.jsonbin.io/v3/b";
-const CLOUD_FALLBACK_MASTER = "$2a$10$7ZkEw7m9Z3QJ5zE0o9h.xe"; // Optional fallback
+// Global Persistent Cloud KV Layer (Synchronizes across all Vercel Serverless instances, mobile & laptop)
+const ECHOVALUE_URL = "https://api.echovalue.dev/kv/default/fieldintel_central_data";
+const ECHOVALUE_TOKEN = "djrT9nPqzTcputPsYIhC";
+
+// Helper: load from EchoValue Cloud KV
+async function loadFromEchoValue(): Promise<CentralData | null> {
+  try {
+    const res = await fetch(ECHOVALUE_URL, {
+      headers: { "x-token": ECHOVALUE_TOKEN },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (Array.isArray(data.audits) || Array.isArray(data.stores))) {
+        return data as CentralData;
+      }
+    }
+  } catch (err) {
+    console.warn("EchoValue Cloud KV load failed:", err);
+  }
+  return null;
+}
+
+// Helper: save to EchoValue Cloud KV
+async function saveToEchoValue(data: CentralData): Promise<boolean> {
+  try {
+    const res = await fetch(ECHOVALUE_URL, {
+      method: "POST",
+      headers: {
+        "x-token": ECHOVALUE_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("EchoValue Cloud KV save failed:", err);
+    return false;
+  }
+}
 
 // Helper: load from Upstash Redis if configured
 async function loadFromUpstash(): Promise<CentralData | null> {
@@ -107,12 +144,19 @@ export async function getCentralDataAsync(): Promise<CentralData> {
     return upstashData;
   }
 
-  // 2. Try in-memory cache
+  // 2. Try Global EchoValue Cloud KV (persists across all Vercel lambda instances, mobile & laptop!)
+  const cloudData = await loadFromEchoValue();
+  if (cloudData) {
+    memoryCache = cloudData;
+    return cloudData;
+  }
+
+  // 3. Try in-memory cache
   if (memoryCache && (memoryCache.audits.length > 0 || memoryCache.stores.length > 0)) {
     return memoryCache;
   }
 
-  // 3. Try local filesystem
+  // 4. Try local filesystem
   const fileData = loadLocalFile();
   if (fileData) {
     memoryCache = fileData;
@@ -124,6 +168,7 @@ export async function getCentralDataAsync(): Promise<CentralData> {
     audits: [],
     customCategories: [],
     customBrands: [],
+    adminPin: "9999",
     lastUpdated: new Date().toISOString(),
   };
 }
@@ -132,6 +177,7 @@ export async function saveCentralDataAsync(data: CentralData): Promise<void> {
   memoryCache = data;
   saveLocalFile(data);
   await saveToUpstash(data);
+  await saveToEchoValue(data);
 }
 
 // Synchronous fallbacks for backwards compatibility
