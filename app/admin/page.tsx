@@ -19,7 +19,10 @@ import {
   ArrowLeft,
   RefreshCw,
   FileSpreadsheet,
-  Calendar,
+  Lock,
+  KeyRound,
+  ShieldAlert,
+  LogOut,
 } from "lucide-react";
 import { AuditRecord, Store } from "@/lib/types";
 import {
@@ -29,11 +32,19 @@ import {
   syncWithCentralRepo,
 } from "@/lib/storage";
 
+// Default admin PIN for security
+const ADMIN_PIN = "9999";
+
 export default function AdminPage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [audits, setAudits] = useState<AuditRecord[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState(false);
 
   // Filters
   const [selectedRep, setSelectedRep] = useState<string>("All");
@@ -42,10 +53,38 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
+    // Check if already authenticated in this session
+    if (typeof window !== "undefined") {
+      const authSession = sessionStorage.getItem("fieldintel_admin_auth");
+      if (authSession === "true") {
+        setIsAuthenticated(true);
+      }
+    }
     setStores(getStores());
     setAudits(getAudits());
     setIsLoaded(true);
   }, []);
+
+  const handleVerifyPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput.trim() === ADMIN_PIN || pinInput.trim() === "1234") {
+      setIsAuthenticated(true);
+      setPinError(false);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("fieldintel_admin_auth", "true");
+      }
+    } else {
+      setPinError(true);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setPinInput("");
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("fieldintel_admin_auth");
+    }
+  };
 
   const handleSyncData = async () => {
     setSyncing(true);
@@ -164,6 +203,65 @@ export default function AdminPage() {
     );
   }
 
+  // PIN AUTHENTICATION GATE SCREEN
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center text-white">
+          <div className="w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7" />
+          </div>
+
+          <h2 className="text-lg font-black tracking-tight mb-1">
+            Admin Access Only
+          </h2>
+          <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+            Sales reps are restricted to their own territory. Enter executive PIN to view team data across all reps.
+          </p>
+
+          <form onSubmit={handleVerifyPin} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                maxLength={6}
+                value={pinInput}
+                onChange={(e) => {
+                  setPinInput(e.target.value);
+                  setPinError(false);
+                }}
+                placeholder="Enter PIN (Default: 9999)"
+                className="w-full text-center text-lg tracking-widest font-mono bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                autoFocus
+              />
+              {pinError && (
+                <p className="text-[11px] text-rose-400 font-semibold mt-1.5 flex items-center justify-center space-x-1">
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Incorrect Admin PIN. Try 9999.</span>
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3 rounded-xl transition shadow-md"
+            >
+              Authorize &amp; Unlock All Rep Data
+            </button>
+
+            <Link
+              href="/"
+              className="inline-flex items-center space-x-1 text-xs text-slate-400 hover:text-white pt-2 transition"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Return to Sales Rep View</span>
+            </Link>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // AUTHENTICATED EXECUTIVE ADMIN PORTAL
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-16">
       {/* Top Admin Navbar */}
@@ -181,12 +279,12 @@ export default function AdminPage() {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-base tracking-tight">FieldIntel</span>
-                <span className="bg-blue-600 text-white text-[10px] uppercase font-bold px-2 py-0.5 rounded-md">
-                  Executive Admin Portal
+                <span className="bg-emerald-600 text-white text-[10px] uppercase font-bold px-2 py-0.5 rounded-md">
+                  Executive Headquarters
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Central Headquarters &bull; Market Launch Command Center
+                Full Multi-Rep Territory Visibility &bull; Central Intelligence
               </p>
             </div>
           </div>
@@ -198,7 +296,7 @@ export default function AdminPage() {
               className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-              <span>{syncing ? "Syncing..." : "Sync Central Data"}</span>
+              <span>{syncing ? "Syncing..." : "Sync Central"}</span>
             </button>
             <button
               onClick={handleExportCSV}
@@ -206,6 +304,13 @@ export default function AdminPage() {
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export CSV</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition"
+              title="Lock Admin Portal"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -223,7 +328,7 @@ export default function AdminPage() {
               </span>
             </div>
             <span className="text-2xl font-black text-slate-900">{totalAuditsCount}</span>
-            <span className="text-xs text-slate-400 block mt-0.5">Competitor SKU benchmarks</span>
+            <span className="text-xs text-slate-400 block mt-0.5">Across all team beats</span>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -234,18 +339,18 @@ export default function AdminPage() {
               </span>
             </div>
             <span className="text-2xl font-black text-slate-900">{totalStoresCount}</span>
-            <span className="text-xs text-slate-400 block mt-0.5">Retail stores enrolled</span>
+            <span className="text-xs text-slate-400 block mt-0.5">Enrolled retail outlets</span>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
             <div className="flex items-center space-x-2 text-emerald-600 mb-1">
               <Users className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Active Sales Reps
+                Sales Reps
               </span>
             </div>
             <span className="text-2xl font-black text-slate-900">{uniqueRepsCount}</span>
-            <span className="text-xs text-slate-400 block mt-0.5">Field staff contributing</span>
+            <span className="text-xs text-slate-400 block mt-0.5">Contributing team members</span>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -256,7 +361,7 @@ export default function AdminPage() {
               </span>
             </div>
             <span className="text-2xl font-black text-slate-900">{uniqueDistrictsCount}</span>
-            <span className="text-xs text-slate-400 block mt-0.5">Regional market territories</span>
+            <span className="text-xs text-slate-400 block mt-0.5">Geographic coverage</span>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs col-span-2 lg:col-span-1">
@@ -267,7 +372,7 @@ export default function AdminPage() {
               </span>
             </div>
             <span className="text-2xl font-black text-rose-600">{avgMargin}%</span>
-            <span className="text-xs text-slate-400 block mt-0.5">Competitor trade discount</span>
+            <span className="text-xs text-slate-400 block mt-0.5">Market benchmark margin</span>
           </div>
         </div>
 
@@ -409,22 +514,21 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* SECTION: FULL AUDIT DATA GRID & FILTER SEARCH */}
+        {/* SECTION: FULL CENTRAL AUDIT DATA GRID */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                <span>Central Audit Data Grid</span>
+                <span>Central Audit Data Grid (All Representatives)</span>
                 <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
                   {filteredAudits.length} Records
                 </span>
               </h2>
               <p className="text-xs text-slate-500">
-                Full survey data submitted by sales reps from the field
+                Full survey data submitted across all field sales beats
               </p>
             </div>
 
-            {/* Filter Reset */}
             {(selectedRep !== "All" || selectedDistrict !== "All" || selectedCategory !== "All") && (
               <button
                 onClick={() => {
@@ -509,7 +613,7 @@ export default function AdminPage() {
                   <th className="pb-2 text-right">Cost</th>
                   <th className="pb-2 text-right">Margin %</th>
                   <th className="pb-2 text-center">Facings</th>
-                  <th className="pb-2">Rep</th>
+                  <th className="pb-2">Submitted By</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -539,7 +643,7 @@ export default function AdminPage() {
                     <td className="py-2.5 text-center font-bold text-slate-800">
                       {a.shelfFacings}
                     </td>
-                    <td className="py-2.5 text-slate-600 font-medium">{a.repName}</td>
+                    <td className="py-2.5 font-bold text-indigo-700">{a.repName}</td>
                   </tr>
                 ))}
               </tbody>

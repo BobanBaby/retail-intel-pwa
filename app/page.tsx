@@ -21,16 +21,22 @@ import {
 export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>("audit");
   const [stores, setStores] = useState<Store[]>([]);
-  const [audits, setAudits] = useState<AuditRecord[]>([]);
+  const [allAudits, setAllAudits] = useState<AuditRecord[]>([]);
   const [repName, setRepName] = useState<string>("Rahul Sharma (Rep)");
   const [preselectedStoreId, setPreselectedStoreId] = useState<string | undefined>(undefined);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  // Initialize data and register Service Worker
+  // Initialize data and load rep preference
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedRep = localStorage.getItem("fieldintel_active_rep");
+      if (savedRep) {
+        setRepName(savedRep);
+      }
+    }
     setStores(getStores());
-    setAudits(getAudits());
+    setAllAudits(getAudits());
     setIsLoaded(true);
 
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -41,7 +47,19 @@ export default function Home() {
     }
   }, []);
 
-  const unsyncedCount = audits.filter((a) => !a.synced).length;
+  const handleSetRepName = (name: string) => {
+    setRepName(name);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("fieldintel_active_rep", name);
+    }
+  };
+
+  // PRIVACY CONTROL: Sales person ONLY sees their own submitted audits!
+  const myAudits = allAudits.filter(
+    (a) => a.repName.trim().toLowerCase() === repName.trim().toLowerCase()
+  );
+
+  const unsyncedCount = myAudits.filter((a) => !a.synced).length;
 
   const handleAddStore = (newStore: Store) => {
     const updated = saveStore(newStore);
@@ -50,19 +68,19 @@ export default function Home() {
 
   const handleSubmitAudit = (newAudit: AuditRecord) => {
     const updated = saveAudit(newAudit);
-    setAudits(updated);
+    setAllAudits(updated);
   };
 
   const handleDeleteAudit = (id: string) => {
     if (confirm("Delete this competitor audit entry?")) {
       const updated = deleteAudit(id);
-      setAudits(updated);
+      setAllAudits(updated);
     }
   };
 
   const handleSyncComplete = async () => {
     const res = await syncWithCentralRepo();
-    setAudits(res.audits);
+    setAllAudits(res.audits);
     setStores(res.stores);
     setSyncToast(res.message);
     setTimeout(() => setSyncToast(null), 3000);
@@ -70,7 +88,7 @@ export default function Home() {
 
   const handleReloadData = () => {
     setStores(getStores());
-    setAudits(getAudits());
+    setAllAudits(getAudits());
   };
 
   const handleSelectStoreForAudit = (storeId: string) => {
@@ -96,7 +114,7 @@ export default function Home() {
         unsyncedCount={unsyncedCount}
         onSyncComplete={handleSyncComplete}
         repName={repName}
-        setRepName={setRepName}
+        setRepName={handleSetRepName}
       />
 
       {/* Sync Toast Feedback */}
@@ -105,6 +123,11 @@ export default function Home() {
           {syncToast}
         </div>
       )}
+
+      {/* Rep Privacy Notice Banner */}
+      <div className="bg-blue-50/80 border-b border-blue-100 px-4 py-1.5 text-center text-[11px] text-blue-700 font-medium">
+        Logged in as <strong className="font-bold">{repName}</strong> &bull; Showing only your assigned territory data
+      </div>
 
       {/* Main View Area */}
       <main className="flex-1">
@@ -127,17 +150,19 @@ export default function Home() {
           />
         )}
 
+        {/* Rep ONLY sees their own audits in Audit Log */}
         {currentTab === "list" && (
-          <AuditList audits={audits} onDeleteAudit={handleDeleteAudit} />
+          <AuditList audits={myAudits} onDeleteAudit={handleDeleteAudit} />
         )}
 
+        {/* Rep ONLY sees their own beat metrics */}
         {currentTab === "analytics" && (
-          <AnalyticsDashboard audits={audits} stores={stores} />
+          <AnalyticsDashboard audits={myAudits} stores={stores} />
         )}
 
         {currentTab === "export" && (
           <ExportDataView
-            audits={audits}
+            audits={myAudits}
             stores={stores}
             onReloadData={handleReloadData}
           />
@@ -148,7 +173,7 @@ export default function Home() {
       <BottomNav
         currentTab={currentTab}
         onChangeTab={setCurrentTab}
-        auditCount={audits.length}
+        auditCount={myAudits.length}
         storeCount={stores.length}
       />
     </div>
