@@ -63,6 +63,15 @@ export default function Header({
 
         {/* Status Actions */}
         <div className="flex items-center space-x-2">
+          {/* Admin Portal Button */}
+          <a
+            href="/admin"
+            className="text-[11px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold px-2.5 py-1 rounded-full transition shadow-xs flex items-center space-x-1"
+            title="Open Executive Admin Dashboard"
+          >
+            <span>Admin</span>
+          </a>
+
           {/* Rep Badge */}
           <button
             onClick={() => setShowRepModal(true)}
