@@ -12,6 +12,7 @@ export interface CentralData {
   audits: AuditRecord[];
   customCategories?: CustomCategoryEntry[];
   customBrands?: CustomBrandEntry[];
+  adminPin?: string;
   lastUpdated: string;
 }
 
@@ -225,6 +226,23 @@ export async function deleteCentralAuditAsync(auditId: string): Promise<CentralD
   };
   await saveCentralDataAsync(updated);
   return updated;
+}
+
+export async function setCentralAdminPinAsync(pin: string): Promise<string> {
+  const data = await getCentralDataAsync();
+  const cleanPin = pin.trim();
+  const updated: CentralData = {
+    ...data,
+    adminPin: cleanPin,
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return cleanPin;
+}
+
+export async function getCentralAdminPinAsync(): Promise<string> {
+  const data = await getCentralDataAsync();
+  return data.adminPin || "9999";
 }
 
 export async function syncCentralDataAsync(

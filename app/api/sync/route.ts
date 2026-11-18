@@ -7,6 +7,7 @@ import {
   deleteCentralCategoryAsync,
   deleteCentralStoreAsync,
   deleteCentralAuditAsync,
+  setCentralAdminPinAsync,
 } from "@/lib/serverStorage";
 
 // GET: Retrieve records with strict role separation
@@ -14,11 +15,21 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const isAdmin = searchParams.get("isAdmin") === "true";
+    const checkPin = searchParams.get("checkPin") === "true";
     const repName = (searchParams.get("repName") || "").trim().toLowerCase();
 
     const centralData = await getCentralDataAsync();
     const allAudits = centralData.audits;
     const allStores = centralData.stores;
+    const adminPin = centralData.adminPin || "9999";
+
+    // If requested for login check or admin portal
+    if (checkPin) {
+      return NextResponse.json({
+        success: true,
+        adminPin,
+      });
+    }
 
     // Admin sees everything
     if (isAdmin) {
@@ -31,6 +42,7 @@ export async function GET(req: NextRequest) {
         stores: allStores,
         categories: centralData.customCategories || [],
         brands: centralData.customBrands || [],
+        adminPin,
       });
     }
 
@@ -64,6 +76,22 @@ export async function POST(req: NextRequest) {
     const action = body.action;
 
     // Handle Admin Deletions & Management Actions
+    if (action === "set_admin_pin") {
+      const { pin } = body;
+      if (!pin || String(pin).trim().length < 4) {
+        return NextResponse.json(
+          { success: false, error: "PIN must be at least 4 digits" },
+          { status: 400 }
+        );
+      }
+      const updatedPin = await setCentralAdminPinAsync(String(pin));
+      return NextResponse.json({
+        success: true,
+        message: "Admin PIN updated successfully across the network",
+        adminPin: updatedPin,
+      });
+    }
+
     if (action === "delete_brand") {
       const { brandName, category } = body;
       const updated = await deleteCentralBrandAsync(brandName, category);

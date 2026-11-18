@@ -109,8 +109,8 @@ export default function AuditForm({
   const [showNewStoreModal, setShowNewStoreModal] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
   const [newStoreType, setNewStoreType] = useState<StoreType>("Salon / Parlour");
-  const [newStoreDistrict, setNewStoreDistrict] = useState("Mumbai City");
-  const [newStoreState, setNewStoreState] = useState("Maharashtra");
+  const [newStoreDistrict, setNewStoreDistrict] = useState("");
+  const [newStoreState, setNewStoreState] = useState("");
   const [newStoreArea, setNewStoreArea] = useState("");
   const [newStoreOwner, setNewStoreOwner] = useState("");
   const [newStorePhone, setNewStorePhone] = useState("");
@@ -554,6 +554,8 @@ export default function AuditForm({
     setShowStoreSearchModal(false);
     setNewStoreName("");
     setNewStoreArea("");
+    setNewStoreDistrict("");
+    setNewStoreState("");
     setNewStoreOwner("");
     setNewStorePhone("");
     setStoreSearchQuery("");
@@ -1691,7 +1693,7 @@ export default function AuditForm({
                   required
                   value={newStoreName}
                   onChange={(e) => setNewStoreName(e.target.value)}
-                  placeholder="e.g. Glamour Unisex Salon"
+                  placeholder="e.g. Royal Beauty Centre, City Salon"
                   className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2"
                 />
               </div>
@@ -1705,7 +1707,7 @@ export default function AuditForm({
                     type="text"
                     value={newStoreOwner}
                     onChange={(e) => setNewStoreOwner(e.target.value)}
-                    placeholder="e.g. Ramesh"
+                    placeholder="e.g. Ramesh Kumar"
                     className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
                   />
                 </div>
@@ -1717,7 +1719,7 @@ export default function AuditForm({
                     type="tel"
                     value={newStorePhone}
                     onChange={(e) => setNewStorePhone(e.target.value)}
-                    placeholder="e.g. 9820012345"
+                    placeholder="e.g. 9847012345"
                     className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
                   />
                 </div>
@@ -1750,7 +1752,7 @@ export default function AuditForm({
                     required
                     value={newStoreDistrict}
                     onChange={(e) => setNewStoreDistrict(e.target.value)}
-                    placeholder="e.g. Mumbai City"
+                    placeholder="e.g. Ernakulam, Kozhikode"
                     className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
                   />
                 </div>
@@ -1762,7 +1764,7 @@ export default function AuditForm({
                     type="text"
                     value={newStoreState}
                     onChange={(e) => setNewStoreState(e.target.value)}
-                    placeholder="e.g. Maharashtra"
+                    placeholder="e.g. Kerala"
                     className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
                   />
                 </div>
@@ -1777,7 +1779,7 @@ export default function AuditForm({
                   required
                   value={newStoreArea}
                   onChange={(e) => setNewStoreArea(e.target.value)}
-                  placeholder="e.g. Bandra West Hill Rd"
+                  placeholder="e.g. Edappally, MG Road"
                   className="w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5"
                 />
               </div>

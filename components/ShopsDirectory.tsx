@@ -50,8 +50,8 @@ export default function ShopsDirectory({
   const [ownerName, setOwnerName] = useState("");
   const [phone, setPhone] = useState("");
   const [type, setType] = useState<StoreType>("Salon / Parlour");
-  const [state, setState] = useState("Maharashtra");
-  const [district, setDistrict] = useState("Mumbai City");
+  const [state, setState] = useState("");
+  const [district, setDistrict] = useState("");
   const [area, setArea] = useState("");
   const [pincode, setPincode] = useState("");
   const [gpsLat, setGpsLat] = useState<number | undefined>(undefined);
@@ -130,6 +130,8 @@ export default function ShopsDirectory({
     setName("");
     setOwnerName("");
     setPhone("");
+    setDistrict("");
+    setState("");
     setArea("");
     setPincode("");
     setGpsLat(undefined);

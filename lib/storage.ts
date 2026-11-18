@@ -11,6 +11,37 @@ const STORES_STORAGE_KEY = "fieldintel_stores_clean_v3";
 const AUDITS_STORAGE_KEY = "fieldintel_audits_clean_v3";
 const CUSTOM_CATEGORIES_KEY = "fieldintel_custom_categories_v3";
 const CUSTOM_BRANDS_KEY = "fieldintel_custom_brands_v3";
+const ADMIN_PIN_STORAGE_KEY = "fieldintel_admin_custom_pin";
+
+export function getAdminPin(): string {
+  if (typeof window === "undefined") return "9999";
+  try {
+    return localStorage.getItem(ADMIN_PIN_STORAGE_KEY) || "9999";
+  } catch (err) {
+    return "9999";
+  }
+}
+
+export async function saveAdminPin(newPin: string): Promise<string> {
+  const clean = newPin.trim();
+  if (typeof window !== "undefined") {
+    localStorage.setItem(ADMIN_PIN_STORAGE_KEY, clean);
+  }
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_admin_pin", pin: clean }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.adminPin || clean;
+    }
+  } catch (err) {
+    console.warn("Failed to sync admin PIN to server:", err);
+  }
+  return clean;
+}
 
 export function getCustomCategories(): CustomCategoryEntry[] {
   if (typeof window === "undefined") return [];
