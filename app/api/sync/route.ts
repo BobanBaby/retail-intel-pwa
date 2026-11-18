@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCentralAudits, getCentralStores, resetCentralData, syncCentralData } from "@/lib/serverStorage";
+import {
+  getCentralDataAsync,
+  resetCentralDataAsync,
+  syncCentralDataAsync,
+} from "@/lib/serverStorage";
 
 // GET: Retrieve records with strict role separation
 export async function GET(req: NextRequest) {
@@ -8,8 +12,9 @@ export async function GET(req: NextRequest) {
     const isAdmin = searchParams.get("isAdmin") === "true";
     const repName = (searchParams.get("repName") || "").trim().toLowerCase();
 
-    const allAudits = getCentralAudits();
-    const allStores = getCentralStores();
+    const centralData = await getCentralDataAsync();
+    const allAudits = centralData.audits;
+    const allStores = centralData.stores;
 
     // Admin sees everything
     if (isAdmin) {
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest) {
     const repName = (body.repName || "").trim().toLowerCase();
 
     // Merge into central repository
-    const result = syncCentralData(incomingAudits, incomingStores);
+    const result = await syncCentralDataAsync(incomingAudits, incomingStores);
 
     // If Admin, return full global organization data
     if (isAdmin) {
@@ -98,7 +103,7 @@ export async function POST(req: NextRequest) {
 // DELETE: Admin wipe - reset entire central database back to fresh clean state
 export async function DELETE() {
   try {
-    resetCentralData();
+    await resetCentralDataAsync();
     return NextResponse.json({
       success: true,
       message: "Central server repository wiped clean. System reset to fresh state.",

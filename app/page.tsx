@@ -45,6 +45,16 @@ export default function Home() {
     setAllAudits(getAudits());
     setIsLoaded(true);
 
+    // Auto-fetch latest audits from Central Server on load
+    if (savedRep.trim()) {
+      syncWithCentralRepo(savedRep.trim(), false).then((res) => {
+        if (res.success) {
+          setAllAudits(res.audits);
+          setStores(res.stores);
+        }
+      }).catch((err) => console.warn("Background initial sync failed:", err));
+    }
+
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
@@ -62,6 +72,12 @@ export default function Home() {
       localStorage.setItem("fieldintel_active_rep_v3", cleanName);
     }
     setShowOnboarding(false);
+    syncWithCentralRepo(cleanName, false).then((res) => {
+      if (res.success) {
+        setAllAudits(res.audits);
+        setStores(res.stores);
+      }
+    }).catch((err) => console.warn("Onboarding sync failed:", err));
   };
 
   const handleSetRepName = (name: string) => {
