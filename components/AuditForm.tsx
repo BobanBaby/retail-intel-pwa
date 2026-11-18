@@ -216,7 +216,6 @@ export default function AuditForm({
     PRODUCT_CATEGORIES[0].brands[0]?.brand || "Other"
   );
   const [customBrand, setCustomBrand] = useState<string>("");
-  const [brandSearchQuery, setBrandSearchQuery] = useState<string>("");
   const [variant, setVariant] = useState<string>(
     PRODUCT_CATEGORIES[0].brands[0]?.variants[0] || "Standard"
   );
@@ -225,6 +224,12 @@ export default function AuditForm({
   );
   const [unit, setUnit] = useState<UnitType>(PRODUCT_CATEGORIES[0].unit);
   const [customPackSize, setCustomPackSize] = useState<string>("");
+
+  // Brand Search & Modal State (matching store selector pattern)
+  const [showBrandSearchModal, setShowBrandSearchModal] = useState(false);
+  const [brandSearchQuery, setBrandSearchQuery] = useState<string>("");
+  const [brandSearchCategoryFilter, setBrandSearchCategoryFilter] = useState("All");
+  const brandSearchInputRef = useRef<HTMLInputElement>(null);
 
   // All catalog brands flattened for universal search
   const allCatalogBrands = useMemo(() => {
@@ -250,37 +255,42 @@ export default function AuditForm({
     return list;
   }, []);
 
-  // Filtered brands for selected category
-  const filteredCategoryBrands = useMemo(() => {
+  // Filtered brands for brand search modal
+  const searchFilteredBrands = useMemo(() => {
     const q = brandSearchQuery.trim().toLowerCase();
-    if (!q) return selectedCategory.brands;
-    return selectedCategory.brands.filter(
-      (b) =>
+    return allCatalogBrands.filter((b) => {
+      const matchText =
+        !q ||
         b.brand.toLowerCase().includes(q) ||
-        b.variants.some((v) => v.toLowerCase().includes(q))
-    );
-  }, [selectedCategory, brandSearchQuery]);
+        b.categoryName.toLowerCase().includes(q) ||
+        b.variants.some((v) => v.toLowerCase().includes(q));
 
-  // Brand matches from other categories
-  const otherCategoryBrandMatches = useMemo(() => {
-    const q = brandSearchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return allCatalogBrands.filter(
-      (b) =>
-        b.categoryId !== selectedCategory.id &&
-        (b.brand.toLowerCase().includes(q) ||
-          b.variants.some((v) => v.toLowerCase().includes(q)))
-    );
-  }, [allCatalogBrands, selectedCategory, brandSearchQuery]);
+      const matchCategory =
+        brandSearchCategoryFilter === "All" ||
+        b.categoryId === brandSearchCategoryFilter;
 
-  // Select cross-category brand match
-  const handleSelectCrossCategoryBrand = (item: (typeof allCatalogBrands)[0]) => {
+      return matchText && matchCategory;
+    });
+  }, [allCatalogBrands, brandSearchQuery, brandSearchCategoryFilter]);
+
+  // Select brand from search modal
+  const handleSelectBrandFromModal = (item: (typeof allCatalogBrands)[0]) => {
     const targetCat = PRODUCT_CATEGORIES.find((c) => c.id === item.categoryId);
     if (targetCat) {
       setSelectedCategory(targetCat);
       setUnit(targetCat.unit);
     }
-    handleSelectBrand(item.brand);
+    setSelectedBrand(item.brand);
+    setVariant(item.variants[0] || "Standard");
+    const defSize = item.commonSizes[0] || targetCat?.defaultSizes[0] || 100;
+    setPackSize(defSize);
+    setCustomPackSize("");
+    const estMrp = Math.round(defSize * 1.5);
+    const estCost = Math.round(estMrp * (1 - item.typicalMargin / 100));
+    setMrp(String(estMrp));
+    setRetailerCost(String(estCost));
+    setCustomerPrice(String(estMrp));
+    setShowBrandSearchModal(false);
     setBrandSearchQuery("");
   };
 
@@ -289,6 +299,7 @@ export default function AuditForm({
     setSelectedBrand("Other");
     setCustomBrand(customName);
     setVariant("");
+    setShowBrandSearchModal(false);
     setBrandSearchQuery("");
   };
 
@@ -646,117 +657,67 @@ export default function AuditForm({
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>3. Competitor Brand &amp; SKU Specs</span>
             </label>
-            {selectedBrand && (
-              <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 truncate max-w-[150px]">
-                {selectedBrand === "Other" ? (customBrand || "Custom Brand") : selectedBrand}
-              </span>
-            )}
-          </div>
-
-          {/* Real-time Brand Search Bar */}
-          <div className="relative mb-2.5">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={brandSearchQuery}
-              onChange={(e) => setBrandSearchQuery(e.target.value)}
-              placeholder={`Search ${selectedCategory.name} brands (e.g. Gatsby, Parachute, Dove)...`}
-              className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl pl-8.5 pr-8 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium placeholder:text-slate-400"
-            />
-            {brandSearchQuery && (
-              <button
-                type="button"
-                onClick={() => setBrandSearchQuery("")}
-                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 p-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Quick Action: Use custom typed brand if search has text and not an exact match */}
-          {brandSearchQuery.trim() &&
-            !filteredCategoryBrands.some(
-              (b) => b.brand.toLowerCase() === brandSearchQuery.trim().toLowerCase()
-            ) && (
-              <div className="mb-2">
-                <button
-                  type="button"
-                  onClick={() => handleUseCustomBrand(brandSearchQuery.trim())}
-                  className="w-full text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 border border-dashed border-amber-300 rounded-xl p-2 font-semibold flex items-center justify-between transition"
-                >
-                  <span className="truncate">
-                    + Use <strong>&ldquo;{brandSearchQuery.trim()}&rdquo;</strong> as custom brand
-                  </span>
-                  <span className="text-[10px] bg-amber-200 px-2 py-0.5 rounded-md shrink-0 ml-1">
-                    Select
-                  </span>
-                </button>
-              </div>
-            )}
-
-          {/* Brand Pills in Current Category */}
-          <div className="flex flex-wrap gap-1.5 mb-2.5">
-            {filteredCategoryBrands.map((item) => {
-              const isSelected = selectedBrand === item.brand;
-              return (
-                <button
-                  key={item.brand}
-                  type="button"
-                  onClick={() => {
-                    handleSelectBrand(item.brand);
-                    setBrandSearchQuery("");
-                  }}
-                  className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition ${
-                    isSelected
-                      ? "bg-blue-600 text-white shadow-xs font-semibold ring-2 ring-blue-300"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  {item.brand}
-                </button>
-              );
-            })}
             <button
               type="button"
               onClick={() => {
                 setSelectedBrand("Other");
                 setVariant("");
+                setCustomBrand("");
               }}
-              className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition ${
-                selectedBrand === "Other"
-                  ? "bg-blue-600 text-white font-semibold ring-2 ring-blue-300"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
             >
-              + Other Brand
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Custom Brand</span>
             </button>
           </div>
 
-          {/* Cross-Category Suggestions if user searched */}
-          {otherCategoryBrandMatches.length > 0 && (
-            <div className="mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Matches in other categories:
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {otherCategoryBrandMatches.slice(0, 6).map((match) => (
-                  <button
-                    key={`${match.categoryId}-${match.brand}`}
-                    type="button"
-                    onClick={() => handleSelectCrossCategoryBrand(match)}
-                    className="text-xs bg-white border border-slate-300 hover:border-blue-400 text-slate-800 px-2.5 py-1 rounded-lg flex items-center space-x-1"
-                  >
-                    <span className="font-bold">{match.brand}</span>
-                    <span className="text-[10px] text-slate-400">({match.categoryName})</span>
-                  </button>
-                ))}
+          <div className="space-y-2">
+            {/* Tap to Search / Change Brand Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                setBrandSearchCategoryFilter(selectedCategory.id);
+                setShowBrandSearchModal(true);
+                setTimeout(() => brandSearchInputRef.current?.focus(), 150);
+              }}
+              className="w-full text-left bg-slate-50 hover:bg-slate-100 active:bg-slate-200/70 transition p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-hidden group"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-extrabold text-slate-900 truncate">
+                      {selectedBrand === "Other"
+                        ? (customBrand.trim() || "Custom Competitor Brand")
+                        : selectedBrand}
+                    </span>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded-full shrink-0">
+                      {selectedCategory.name}
+                    </span>
+                    {activeBrandConfig && (
+                      <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded shrink-0">
+                        ~{activeBrandConfig.typicalMargin}% Margin
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate mt-1 flex items-center space-x-1">
+                    <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                    <span>
+                      {selectedBrand === "Other"
+                        ? "Custom competitor entry • Enter details below"
+                        : `Variant: ${variant || "Standard"} • ${packSize}${unit}`}
+                    </span>
+                  </p>
+                </div>
+                <div className="shrink-0 flex items-center space-x-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs group-hover:bg-blue-700 transition">
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Search</span>
+                </div>
               </div>
-            </div>
-          )}
+            </button>
+          </div>
 
           {selectedBrand === "Other" && (
-            <div className="mb-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div className="mt-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
               <label className="text-xs text-slate-700 font-bold mb-1 block">
                 Type Competitor Brand Name *
               </label>
@@ -1335,6 +1296,208 @@ export default function AuditForm({
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>+ Register New Shop</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SEARCH & SELECT BRAND (Exact same style as Shop selector modal) */}
+      {showBrandSearchModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90vh] sm:max-h-[82vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="p-3.5 sm:p-4 border-b border-slate-200 shrink-0 bg-slate-50">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Select Competitor Brand</h3>
+                    <p className="text-[11px] text-slate-500">
+                      {allCatalogBrands.length} brands cataloged across categories
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleUseCustomBrand(brandSearchQuery.trim());
+                    }}
+                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1.5 rounded-lg flex items-center space-x-1 shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Custom Brand</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBrandSearchModal(false)}
+                    className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Instant Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  ref={brandSearchInputRef}
+                  type="text"
+                  value={brandSearchQuery}
+                  onChange={(e) => setBrandSearchQuery(e.target.value)}
+                  placeholder="Search brand name, variant, or category..."
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden text-slate-900 font-medium placeholder:text-slate-400"
+                />
+                {brandSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setBrandSearchQuery("")}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Pills: Categories */}
+              <div className="mt-2.5 flex items-center space-x-2 overflow-x-auto pb-1 text-xs scrollbar-none">
+                <div className="shrink-0 flex items-center space-x-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Category:</span>
+                  <select
+                    value={brandSearchCategoryFilter}
+                    onChange={(e) => setBrandSearchCategoryFilter(e.target.value)}
+                    className="bg-transparent text-[11px] font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="All">All Categories ({allCatalogBrands.length})</option>
+                    {PRODUCT_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.brands.length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Results List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 sm:p-3">
+              {searchFilteredBrands.length === 0 ? (
+                <div className="text-center py-10 px-4">
+                  <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-800 mb-1">
+                    No brands match {brandSearchQuery ? `"${brandSearchQuery}"` : "the selected filters"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mb-3">
+                    Competitor not in the list? You can record them as custom brand.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleUseCustomBrand(brandSearchQuery.trim())}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl inline-flex items-center space-x-1.5 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>
+                      {brandSearchQuery ? `+ Use "${brandSearchQuery}" as Brand` : "+ Custom Brand"}
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {/* Quick Custom Option if user has typed something that isn't an exact match */}
+                  {brandSearchQuery.trim() &&
+                    !searchFilteredBrands.some(
+                      (b) => b.brand.toLowerCase() === brandSearchQuery.trim().toLowerCase()
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={() => handleUseCustomBrand(brandSearchQuery.trim())}
+                        className="w-full text-left p-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-dashed border-amber-300 transition flex items-center justify-between"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-amber-900">
+                            + Use &ldquo;{brandSearchQuery.trim()}&rdquo; as custom brand
+                          </p>
+                          <p className="text-[10px] text-amber-700">
+                            Record this unlisted competitor product
+                          </p>
+                        </div>
+                        <span className="text-xs bg-amber-200 text-amber-800 font-bold px-2.5 py-1 rounded-lg">
+                          Select
+                        </span>
+                      </button>
+                    )}
+
+                  {searchFilteredBrands.map((b) => {
+                    const isSelected = selectedBrand === b.brand;
+                    return (
+                      <button
+                        key={`${b.categoryId}-${b.brand}`}
+                        type="button"
+                        onClick={() => handleSelectBrandFromModal(b)}
+                        className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between border ${
+                          isSelected
+                            ? "bg-blue-50/80 border-blue-400 ring-1 ring-blue-400"
+                            : "bg-white hover:bg-slate-50 border-slate-200"
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0 pr-3">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-xs font-bold text-slate-900 truncate">
+                              {b.brand}
+                            </h4>
+                            <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full shrink-0">
+                              {b.categoryName}
+                            </span>
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded shrink-0">
+                              ~{b.typicalMargin}% Margin
+                            </span>
+                          </div>
+                          {b.variants.length > 0 && (
+                            <p className="text-[11px] text-slate-500 mt-1 truncate">
+                              <span className="font-medium text-slate-600">Variants:</span>{" "}
+                              {b.variants.join(" • ")}
+                            </p>
+                          )}
+                          {b.commonSizes.length > 0 && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                              Common sizes: {b.commonSizes.map((s) => `${s}${b.unit}`).join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0">
+                          {isSelected ? (
+                            <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="text-slate-300">
+                              <ChevronRight className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs shrink-0">
+              <span className="text-slate-500 font-medium">
+                Showing {searchFilteredBrands.length} of {allCatalogBrands.length} brands
+              </span>
+              <button
+                type="button"
+                onClick={() => handleUseCustomBrand(brandSearchQuery.trim())}
+                className="font-bold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Custom Brand</span>
               </button>
             </div>
           </div>
