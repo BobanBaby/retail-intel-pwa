@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCentralAudits, getCentralStores, syncCentralData } from "@/lib/serverStorage";
+import { getCentralAudits, getCentralStores, resetCentralData, syncCentralData } from "@/lib/serverStorage";
 
 // GET: Retrieve records with strict role separation
 export async function GET(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Receive batch of new audits & shops, and return ONLY authorized scope
+// POST: Receive batch of new audits & shops, and return authorized scope
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -90,6 +90,26 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Sync failed" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE: Admin wipe - reset entire central database back to fresh clean state
+export async function DELETE() {
+  try {
+    resetCentralData();
+    return NextResponse.json({
+      success: true,
+      message: "Central server repository wiped clean. System reset to fresh state.",
+      totalAudits: 0,
+      totalStores: 0,
+      audits: [],
+      stores: [],
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || "Failed to reset server repository" },
       { status: 500 }
     );
   }

@@ -122,6 +122,26 @@ export async function syncWithCentralRepo(
   };
 }
 
+export async function resetSystemFresh(): Promise<{ success: boolean; message: string }> {
+  try {
+    await fetch("/api/sync", {
+      method: "DELETE",
+    });
+  } catch (err) {
+    console.warn("Server reset call failed:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(STORES_STORAGE_KEY);
+    localStorage.removeItem(AUDITS_STORAGE_KEY);
+  }
+
+  return {
+    success: true,
+    message: "System reset to 100% fresh clean state.",
+  };
+}
+
 export function clearAllLocalData(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem(STORES_STORAGE_KEY);

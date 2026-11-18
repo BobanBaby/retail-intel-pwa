@@ -23,12 +23,16 @@ import {
   KeyRound,
   ShieldAlert,
   LogOut,
+  Trash2,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import { AuditRecord, Store } from "@/lib/types";
 import {
   exportAuditsToCSV,
   getAudits,
   getStores,
+  resetSystemFresh,
   syncWithCentralRepo,
 } from "@/lib/storage";
 
@@ -141,6 +145,18 @@ export default function AdminPage() {
 
   const handleExportCSV = () => {
     exportAuditsToCSV(audits);
+  };
+
+  const handleResetAllFresh = async () => {
+    const confirmed = confirm(
+      "⚠️ DANGER: Are you sure you want to RESET EVERYTHING to a fresh clean state?\n\nThis will permanently delete all audits and retail shops across all sales reps and server storage."
+    );
+    if (!confirmed) return;
+    setSyncing(true);
+    await resetSystemFresh();
+    setAudits([]);
+    setStores([]);
+    setSyncing(false);
   };
 
   // Filter lists
@@ -349,6 +365,15 @@ export default function AdminPage() {
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export CSV</span>
+            </button>
+            <button
+              onClick={handleResetAllFresh}
+              disabled={syncing}
+              className="bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-300 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5"
+              title="Permanently wipe all audits & shops back to clean state"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Reset Clean</span>
             </button>
             <button
               onClick={handleLogout}
@@ -693,6 +718,32 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* EXECUTIVE DANGER ZONE: RESET EVERYTHING FRESH */}
+        <div className="bg-white p-5 rounded-2xl border border-rose-200 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center space-x-2 text-rose-600 mb-1">
+                <AlertTriangle className="w-4 h-4" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-rose-900">
+                  Admin System Reset (Clean Slate)
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 max-w-xl">
+                Need to wipe test surveys before launching the official field beat? This button permanently deletes all competitor audits and retail shops across the central server and local storage, returning the system to an absolute fresh clean state.
+              </p>
+            </div>
+
+            <button
+              onClick={handleResetAllFresh}
+              disabled={syncing}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition flex items-center justify-center space-x-2 shrink-0"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Reset Everything to Fresh State</span>
+            </button>
           </div>
         </div>
       </main>
