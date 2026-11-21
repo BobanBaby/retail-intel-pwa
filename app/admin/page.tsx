@@ -86,6 +86,7 @@ export default function AdminPage() {
   const [customBrands, setCustomBrands] = useState<CustomBrandEntry[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [isCloudConfigured, setIsCloudConfigured] = useState<boolean>(true);
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -164,6 +165,9 @@ export default function AdminPage() {
         if (data.adminPin) {
           setAdminPinState(data.adminPin);
         }
+        if (data.isCloudConfigured !== undefined) {
+          setIsCloudConfigured(data.isCloudConfigured);
+        }
       } else {
         setAudits(getAudits());
         setStores(getStores());
@@ -230,6 +234,8 @@ export default function AdminPage() {
               if (data.categories) setCustomCategories(data.categories);
               if (data.brands) setCustomBrands(data.brands);
               if (data.adminPin) setAdminPinState(data.adminPin);
+        if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
+              if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
             }
           })
           .catch(() => {});
@@ -298,6 +304,7 @@ export default function AdminPage() {
         setCustomCategories(data.categories || []);
         setCustomBrands(data.brands || []);
         if (data.adminPin) setAdminPinState(data.adminPin);
+        if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
       }
     } catch (e) {
       console.warn("handleSyncData error:", e);
@@ -764,6 +771,23 @@ export default function AdminPage() {
           </div>
 
           <div className="flex items-center space-x-2">
+            {isCloudConfigured ? (
+              <div
+                title="Vercel KV / Upstash Redis is active: Submissions from all mobile devices sync live to this laptop"
+                className="hidden sm:flex items-center space-x-1.5 bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl shadow-xs"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Live Cloud Sync</span>
+              </div>
+            ) : (
+              <div
+                title="Vercel KV not connected: Submissions from phones cannot reach this laptop until Vercel KV is enabled in Vercel Storage tab"
+                className="hidden sm:flex items-center space-x-1.5 bg-amber-950/70 border border-amber-500/50 text-amber-300 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl shadow-xs"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Single-Device Mode</span>
+              </div>
+            )}
             <button
               onClick={handleSyncData}
               disabled={syncing}
@@ -863,6 +887,31 @@ export default function AdminPage() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+        {/* Multi-Device Cloud Persistence Notice (Vercel Serverless Stateless containers) */}
+        {!isCloudConfigured && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wide">
+                    Multi-Device Sync Setup Required (Why submissions appear from the same device only)
+                  </h4>
+                  <p className="text-xs text-amber-100/90 mt-1 leading-relaxed">
+                    On Vercel, serverless containers are <strong>stateless and isolated</strong>. Each mobile phone and this admin laptop hit separate containers with separate local memory. To stream live audits from multiple mobile sales reps directly to this admin screen, connect <strong>Vercel KV (Upstash Redis)</strong> in your Vercel project dashboard.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold text-white">30-Second Quick Setup:</span>
+                    <span className="bg-amber-950/80 border border-amber-500/40 px-2 py-1 rounded-lg text-[11px] font-mono text-amber-200">
+                      1. Open vercel.com &rarr; 2. Storage Tab &rarr; 3. Click &ldquo;Create Database (KV)&rdquo; &rarr; 4. Redeploy
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ============================================================== */}
         {/* TAB 1: ANALYTICS & AUDITS                                       */}
         {/* ============================================================== */}

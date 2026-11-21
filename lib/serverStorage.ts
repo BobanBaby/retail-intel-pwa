@@ -23,54 +23,20 @@ let memoryCache: CentralData | null = null;
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
-// Global Persistent Cloud KV Layer (Synchronizes across all Vercel Serverless instances, mobile & laptop)
-const ECHOVALUE_URL = "https://api.echovalue.dev/kv/default/fieldintel_central_data";
-const ECHOVALUE_TOKEN = "djrT9nPqzTcputPsYIhC";
-
-// Helper: load from EchoValue Cloud KV
-async function loadFromEchoValue(): Promise<CentralData | null> {
-  try {
-    const res = await fetch(ECHOVALUE_URL, {
-      headers: { "x-token": ECHOVALUE_TOKEN },
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && (Array.isArray(data.audits) || Array.isArray(data.stores))) {
-        return data as CentralData;
-      }
-    }
-  } catch (err) {
-    console.warn("EchoValue Cloud KV load failed:", err);
-  }
-  return null;
+export function isCloudStorageConfigured(): boolean {
+  return Boolean(UPSTASH_URL && UPSTASH_TOKEN);
 }
 
-// Helper: save to EchoValue Cloud KV
-async function saveToEchoValue(data: CentralData): Promise<boolean> {
-  try {
-    const res = await fetch(ECHOVALUE_URL, {
-      method: "POST",
-      headers: {
-        "x-token": ECHOVALUE_TOKEN,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn("EchoValue Cloud KV save failed:", err);
-    return false;
-  }
-}
-
-// Helper: load from Upstash Redis if configured
+// Helper: load from Upstash Redis / Vercel KV if configured
 async function loadFromUpstash(): Promise<CentralData | null> {
   if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500);
   try {
     const res = await fetch(`${UPSTASH_URL}/get/fieldintel_central_data`, {
       headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
       cache: "no-store",
+      signal: controller.signal,
     });
     if (res.ok) {
       const json = await res.json();
@@ -81,13 +47,17 @@ async function loadFromUpstash(): Promise<CentralData | null> {
     }
   } catch (err) {
     console.warn("Upstash Redis load failed:", err);
+  } finally {
+    clearTimeout(timeoutId);
   }
   return null;
 }
 
-// Helper: save to Upstash Redis if configured
+// Helper: save to Upstash Redis / Vercel KV if configured
 async function saveToUpstash(data: CentralData): Promise<boolean> {
   if (!UPSTASH_URL || !UPSTASH_TOKEN) return false;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500);
   try {
     const res = await fetch(`${UPSTASH_URL}/set/fieldintel_central_data`, {
       method: "POST",
@@ -95,12 +65,15 @@ async function saveToUpstash(data: CentralData): Promise<boolean> {
         Authorization: `Bearer ${UPSTASH_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(JSON.stringify(data)),
+      body: JSON.stringify(data),
+      signal: controller.signal,
     });
     return res.ok;
   } catch (err) {
     console.warn("Upstash Redis save failed:", err);
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -137,26 +110,19 @@ function saveLocalFile(data: CentralData) {
 }
 
 export async function getCentralDataAsync(): Promise<CentralData> {
-  // 1. Try Upstash Redis if configured in Vercel
+  // 1. Try Upstash Redis / Vercel KV if configured
   const upstashData = await loadFromUpstash();
   if (upstashData) {
     memoryCache = upstashData;
     return upstashData;
   }
 
-  // 2. Try Global EchoValue Cloud KV (persists across all Vercel lambda instances, mobile & laptop!)
-  const cloudData = await loadFromEchoValue();
-  if (cloudData) {
-    memoryCache = cloudData;
-    return cloudData;
-  }
-
-  // 3. Try in-memory cache
+  // 2. Try in-memory cache
   if (memoryCache && (memoryCache.audits.length > 0 || memoryCache.stores.length > 0)) {
     return memoryCache;
   }
 
-  // 4. Try local filesystem
+  // 3. Try local filesystem
   const fileData = loadLocalFile();
   if (fileData) {
     memoryCache = fileData;
@@ -177,7 +143,6 @@ export async function saveCentralDataAsync(data: CentralData): Promise<void> {
   memoryCache = data;
   saveLocalFile(data);
   await saveToUpstash(data);
-  await saveToEchoValue(data);
 }
 
 // Synchronous fallbacks for backwards compatibility

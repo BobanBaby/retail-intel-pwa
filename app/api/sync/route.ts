@@ -8,6 +8,7 @@ import {
   deleteCentralStoreAsync,
   deleteCentralAuditAsync,
   setCentralAdminPinAsync,
+  isCloudStorageConfigured,
 } from "@/lib/serverStorage";
 
 // GET: Retrieve records with strict role separation
@@ -22,12 +23,14 @@ export async function GET(req: NextRequest) {
     const allAudits = centralData.audits;
     const allStores = centralData.stores;
     const adminPin = centralData.adminPin || "9999";
+    const isCloudConfigured = isCloudStorageConfigured();
 
     // If requested for login check or admin portal
     if (checkPin) {
       return NextResponse.json({
         success: true,
         adminPin,
+        isCloudConfigured,
       });
     }
 
@@ -43,6 +46,7 @@ export async function GET(req: NextRequest) {
         categories: centralData.customCategories || [],
         brands: centralData.customBrands || [],
         adminPin,
+        isCloudConfigured,
       });
     }
 
@@ -173,6 +177,7 @@ export async function POST(req: NextRequest) {
         stores: result.stores,
         categories: result.categories,
         brands: result.brands,
+        isCloudConfigured: isCloudStorageConfigured(),
       });
     }
 
