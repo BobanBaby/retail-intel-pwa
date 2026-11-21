@@ -278,6 +278,8 @@ export default function AuditForm({
       commonSizes: number[];
       typicalMargin: number;
       unit: UnitType;
+      priority?: number;
+      defaultProduct?: string;
     }[] = [];
     availableCategories.forEach((cat) => {
       cat.brands.forEach((b) => {
@@ -286,6 +288,8 @@ export default function AuditForm({
           categoryName: cat.name,
           categoryId: cat.id,
           unit: cat.unit,
+          priority: b.priority,
+          defaultProduct: b.defaultProduct,
         });
       });
     });
@@ -396,7 +400,7 @@ export default function AuditForm({
       setUnit(targetCat.unit);
     }
     setSelectedBrand(item.brand);
-    setVariant(item.variants[0] || "Standard");
+    setVariant(item.defaultProduct || item.variants[0] || "Standard");
     const defSize = item.commonSizes[0] || targetCat?.defaultSizes[0] || 100;
     setPackSize(defSize);
     setCustomPackSize("");
@@ -843,6 +847,11 @@ export default function AuditForm({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
+                    {activeBrandConfig?.priority && (
+                      <span className="text-[10px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded shadow-2xs shrink-0">
+                        Priority #{activeBrandConfig.priority}
+                      </span>
+                    )}
                     <span className="text-xs font-extrabold text-slate-900 truncate">
                       {selectedBrand === "Other"
                         ? (customBrand.trim() || "Custom Competitor Brand")
@@ -1607,6 +1616,11 @@ export default function AuditForm({
                       >
                         <div className="flex-1 min-w-0 pr-3">
                           <div className="flex items-center space-x-2">
+                            {b.priority && (
+                              <span className="text-[10px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded shadow-2xs shrink-0">
+                                Priority #{b.priority}
+                              </span>
+                            )}
                             <h4 className="text-xs font-bold text-slate-900 truncate">
                               {b.brand}
                             </h4>
@@ -1617,8 +1631,13 @@ export default function AuditForm({
                               ~{b.typicalMargin}% Margin
                             </span>
                           </div>
+                          {b.defaultProduct && (
+                            <p className="text-[11px] text-blue-700 font-semibold mt-1 truncate">
+                              Benchmark SKU: <span className="font-bold text-slate-800">{b.defaultProduct}</span>
+                            </p>
+                          )}
                           {b.variants.length > 0 && (
-                            <p className="text-[11px] text-slate-500 mt-1 truncate">
+                            <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                               <span className="font-medium text-slate-600">Variants:</span>{" "}
                               {b.variants.join(" • ")}
                             </p>

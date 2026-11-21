@@ -290,6 +290,8 @@ export function buildMergedProductCategories(
       ...cat,
       brands: cat.brands.map((b) => ({
         ...b,
+        priority: b.priority,
+        defaultProduct: b.defaultProduct,
         variants: [...b.variants],
         commonSizes: [...b.commonSizes],
       })),
@@ -356,6 +358,8 @@ export function buildMergedProductCategories(
     } else {
       cat.brands.push({
         brand: cb.brand.trim(),
+        priority: cb.priority,
+        defaultProduct: cb.defaultProduct,
         variants: cb.variants?.length ? [...cb.variants] : ["Standard"],
         commonSizes: cb.commonSizes?.length ? [...cb.commonSizes] : [100],
         typicalMargin: cb.typicalMargin || 20,
@@ -404,6 +408,16 @@ export function buildMergedProductCategories(
         brandConfig.commonSizes.sort((a, b) => a - b);
       }
     }
+  });
+
+  // Sort brands in each category: Priority 1, 2, 3... first, followed by others
+  catMap.forEach((cat) => {
+    cat.brands.sort((a, b) => {
+      const pA = a.priority ?? 999;
+      const pB = b.priority ?? 999;
+      if (pA !== pB) return pA - pB;
+      return a.brand.localeCompare(b.brand);
+    });
   });
 
   return Array.from(catMap.values());

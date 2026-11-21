@@ -594,6 +594,8 @@ export default function AdminPage() {
     isCustom: boolean;
     addedByRep?: string;
     auditCount: number;
+    priority?: number;
+    defaultProduct?: string;
   }> = [];
 
   mergedCategories.forEach((cat) => {
@@ -625,6 +627,8 @@ export default function AdminPage() {
         isCustom,
         addedByRep: customEntry?.addedByRep,
         auditCount: brandAuditCount,
+        priority: b.priority,
+        defaultProduct: b.defaultProduct,
       });
     });
   });
@@ -1517,7 +1521,19 @@ export default function AdminPage() {
                       {filteredCatalogBrands.map((b) => (
                         <tr key={`${b.categoryId}-${b.brand}`} className="hover:bg-slate-50">
                           <td className="py-3 font-bold text-slate-900">
-                            <span className="text-sm text-blue-700 block">{b.brand}</span>
+                            <div className="flex items-center space-x-1.5">
+                              {b.priority && (
+                                <span className="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded shadow-2xs shrink-0">
+                                  P#{b.priority}
+                                </span>
+                              )}
+                              <span className="text-sm text-blue-700 font-bold">{b.brand}</span>
+                            </div>
+                            {b.defaultProduct && (
+                              <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                                Benchmark: {b.defaultProduct}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3">
                             <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-semibold text-[10px]">
