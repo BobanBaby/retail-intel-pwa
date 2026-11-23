@@ -39,6 +39,10 @@ import {
   ShoppingBag,
   Calendar,
   Clock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import {
   AuditRecord,
@@ -113,6 +117,15 @@ export default function AdminPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("All");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Pagination for Central Audit Data Grid
+  const [auditPage, setAuditPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setAuditPage(1);
+  }, [selectedRep, selectedDistrict, selectedCategory, searchTerm, pageSize]);
 
   // Catalog Management State
   const [catalogSubTab, setCatalogSubTab] = useState<"all" | "categories" | "brands">("all");
@@ -517,6 +530,12 @@ export default function AdminPage() {
       return matchRep && matchDistrict && matchCategory && matchSearch;
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Pagination for Central Audit Grid
+  const totalAuditPages = Math.ceil(filteredAudits.length / pageSize) || 1;
+  const currentAuditPage = Math.min(Math.max(1, auditPage), totalAuditPages);
+  const auditStartIndex = (currentAuditPage - 1) * pageSize;
+  const paginatedAudits = filteredAudits.slice(auditStartIndex, auditStartIndex + pageSize);
 
   // KPI Calculations
   const totalAuditsCount = audits.length;
@@ -1218,77 +1237,196 @@ export default function AdminPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                   <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 text-[10px] uppercase">
-                      <th className="pb-2">Shop &amp; Area</th>
-                      <th className="pb-2">District</th>
-                      <th className="pb-2">Category</th>
-                      <th className="pb-2">Competitor SKU</th>
-                      <th className="pb-2 text-right">MRP</th>
-                      <th className="pb-2 text-right">Cost</th>
-                      <th className="pb-2 text-right">Margin %</th>
-                      <th className="pb-2 text-center">Facings</th>
-                      <th className="pb-2 whitespace-nowrap">Date &amp; Time</th>
-                      <th className="pb-2">Submitted By</th>
-                      <th className="pb-2 text-right">Action</th>
+                    <tr className="border-b border-slate-200 text-slate-400 text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Shop &amp; Area</th>
+                      <th className="py-2.5 px-3">District</th>
+                      <th className="py-2.5 px-3">Category</th>
+                      <th className="py-2.5 px-3">Competitor SKU</th>
+                      <th className="py-2.5 px-3 text-right">MRP</th>
+                      <th className="py-2.5 px-3 text-right">Cost</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Margin %</th>
+                      <th className="py-2.5 px-3 text-center">Facings</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Date &amp; Time</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Submitted By</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredAudits.map((a) => (
-                      <tr key={a.id} className="hover:bg-slate-50">
-                        <td className="py-2.5">
-                          <span className="font-bold text-slate-900 block">{a.storeName}</span>
-                          <span className="text-[10px] text-slate-500">{a.area}</span>
-                        </td>
-                        <td className="py-2.5 font-semibold text-slate-700">{a.district}</td>
-                        <td className="py-2.5 text-slate-600">{a.category}</td>
-                        <td className="py-2.5">
-                          <span className="font-bold text-blue-700">{a.brand}</span> &bull;{" "}
-                          <span className="text-slate-700">{a.variant}</span> (
-                          <span className="text-slate-500">
-                            {a.packSize} {a.unit}
-                          </span>
-                          )
-                        </td>
-                        <td className="py-2.5 text-right font-black text-slate-900">₹{a.mrp}</td>
-                        <td className="py-2.5 text-right font-semibold text-slate-600">
-                          ₹{a.retailerCost}
-                        </td>
-                        <td className="py-2.5 text-right font-black text-emerald-600">
-                          {a.retailerMarginPct}%
-                        </td>
-                        <td className="py-2.5 text-center font-bold text-slate-800">
-                          {a.shelfFacings}
-                        </td>
-                        <td className="py-2.5 whitespace-nowrap">
-                          <span className="font-bold text-slate-900 block text-xs">
-                            {new Date(a.createdAt).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-medium block">
-                            {new Date(a.createdAt).toLocaleTimeString("en-IN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })}
-                          </span>
-                        </td>
-                        <td className="py-2.5 font-bold text-indigo-700">{a.repName}</td>
-                        <td className="py-2.5 text-right">
-                          <button
-                            onClick={() => handleDeleteSingleAudit(a.id, a.storeName, a.brand)}
-                            className="text-slate-300 hover:text-rose-600 p-1 rounded-lg transition"
-                            title="Delete this audit record"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                    {filteredAudits.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="py-10 text-center text-slate-400 text-xs font-medium">
+                          No audit records found matching your filter criteria.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      paginatedAudits.map((a) => (
+                        <tr key={a.id} className="hover:bg-slate-50 transition">
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-slate-900 block text-xs">{a.storeName}</span>
+                            <span className="text-[10px] text-slate-500">{a.area}</span>
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-slate-700 whitespace-nowrap">{a.district}</td>
+                          <td className="py-3 px-3 text-slate-600">{a.category}</td>
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-blue-700">{a.brand}</span> &bull;{" "}
+                            <span className="text-slate-700">{a.variant}</span>{" "}
+                            <span className="text-slate-400 text-[11px]">
+                              ({a.packSize} {a.unit})
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right font-black text-slate-900 whitespace-nowrap">₹{a.mrp}</td>
+                          <td className="py-3 px-3 text-right font-semibold text-slate-600 whitespace-nowrap">
+                            ₹{a.retailerCost}
+                          </td>
+                          <td className="py-3 px-3 text-right font-black text-emerald-600 whitespace-nowrap">
+                            {a.retailerMarginPct}%
+                          </td>
+                          <td className="py-3 px-3 text-center font-bold text-slate-800">
+                            {a.shelfFacings}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="font-bold text-slate-900 block text-xs">
+                              {new Date(a.createdAt).toLocaleDateString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium block">
+                              {new Date(a.createdAt).toLocaleTimeString("en-IN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-bold text-indigo-700 whitespace-nowrap">{a.repName}</td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => handleDeleteSingleAudit(a.id, a.storeName, a.brand)}
+                              className="text-slate-300 hover:text-rose-600 p-1.5 rounded-lg transition"
+                              title="Delete this audit record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Pagination Controls */}
+              <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs mt-1">
+                {/* Left: Range and Rows per Page */}
+                <div className="flex flex-wrap items-center gap-3 text-slate-500">
+                  <span>
+                    Showing{" "}
+                    <strong className="text-slate-900 font-bold">
+                      {filteredAudits.length === 0 ? 0 : auditStartIndex + 1}
+                    </strong>{" "}
+                    to{" "}
+                    <strong className="text-slate-900 font-bold">
+                      {Math.min(auditStartIndex + pageSize, filteredAudits.length)}
+                    </strong>{" "}
+                    of{" "}
+                    <strong className="text-slate-900 font-bold">{filteredAudits.length}</strong>{" "}
+                    audits
+                  </span>
+
+                  <div className="flex items-center space-x-1.5 pl-3 border-l border-slate-200">
+                    <span className="text-[11px] text-slate-400 font-medium">Rows:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-bold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
+                    >
+                      <option value={10}>10 per page</option>
+                      <option value={25}>25 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Right: Page Navigation */}
+                {totalAuditPages > 1 && (
+                  <div className="flex items-center space-x-1">
+                    <button
+                      type="button"
+                      disabled={currentAuditPage === 1}
+                      onClick={() => setAuditPage(1)}
+                      title="First Page"
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition text-slate-600 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={currentAuditPage === 1}
+                      onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                      title="Previous Page"
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition text-slate-600 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center space-x-1 px-1">
+                      {Array.from({ length: totalAuditPages }, (_, idx) => idx + 1)
+                        .filter((p) => {
+                          if (totalAuditPages <= 7) return true;
+                          return (
+                            p === 1 ||
+                            p === totalAuditPages ||
+                            Math.abs(p - currentAuditPage) <= 1
+                          );
+                        })
+                        .map((p, i, arr) => {
+                          const prev = arr[i - 1];
+                          const showEllipsis = prev && p - prev > 1;
+                          return (
+                            <React.Fragment key={p}>
+                              {showEllipsis && (
+                                <span className="px-1 text-slate-400 font-bold">&bull;&bull;&bull;</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setAuditPage(p)}
+                                className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                  currentAuditPage === p
+                                    ? "bg-blue-600 text-white shadow-xs"
+                                    : "border border-slate-200 text-slate-700 hover:bg-slate-100"
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={currentAuditPage === totalAuditPages}
+                      onClick={() => setAuditPage((p) => Math.min(totalAuditPages, p + 1))}
+                      title="Next Page"
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition text-slate-600 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={currentAuditPage === totalAuditPages}
+                      onClick={() => setAuditPage(totalAuditPages)}
+                      title="Last Page"
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition text-slate-600 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
