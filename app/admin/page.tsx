@@ -87,6 +87,8 @@ export default function AdminPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [isCloudConfigured, setIsCloudConfigured] = useState<boolean>(true);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState<boolean>(false);
+  const [isTestingCloud, setIsTestingCloud] = useState<boolean>(false);
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);

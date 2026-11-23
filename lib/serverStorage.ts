@@ -19,22 +19,65 @@ export interface CentralData {
 // In-memory cache for serverless invocation lifecycle
 let memoryCache: CentralData | null = null;
 
-// Upstash Redis configuration (from Vercel environment variables)
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+// Dynamic Redis / KV credential resolver (supports all Vercel KV, Upstash, and REDIS_URL formats)
+function getRedisCredentials(): { url: string; token: string } | null {
+  // 1. Direct REST API URL & Token (standard for Vercel KV / Upstash)
+  const directUrl =
+    process.env.UPSTASH_REDIS_REST_URL ||
+    process.env.KV_REST_API_URL ||
+    process.env.REDIS_REST_URL;
+
+  const directToken =
+    process.env.UPSTASH_REDIS_REST_TOKEN ||
+    process.env.KV_REST_API_TOKEN ||
+    process.env.REDIS_REST_TOKEN;
+
+  if (directUrl && directToken) {
+    return {
+      url: directUrl.replace(/\/+$/, ""),
+      token: directToken.trim(),
+    };
+  }
+
+  // 2. Parse from connection string (e.g. KV_URL or REDIS_URL like rediss://default:token@endpoint.upstash.io:6379)
+  const connStr =
+    process.env.KV_URL ||
+    process.env.REDIS_URL ||
+    process.env.UPSTASH_REDIS_URL;
+
+  if (connStr && connStr.startsWith("redis")) {
+    try {
+      const parsed = new URL(connStr);
+      const host = parsed.hostname;
+      const token = parsed.password || parsed.username;
+      if (host && token) {
+        return {
+          url: `https://${host}`,
+          token: token,
+        };
+      }
+    } catch {
+      // ignore parse failure
+    }
+  }
+
+  return null;
+}
 
 export function isCloudStorageConfigured(): boolean {
-  return Boolean(UPSTASH_URL && UPSTASH_TOKEN);
+  return getRedisCredentials() !== null;
 }
 
 // Helper: load from Upstash Redis / Vercel KV if configured
 async function loadFromUpstash(): Promise<CentralData | null> {
-  if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
+  const creds = getRedisCredentials();
+  if (!creds) return null;
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3500);
   try {
-    const res = await fetch(`${UPSTASH_URL}/get/fieldintel_central_data`, {
-      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+    const res = await fetch(`${creds.url}/get/fieldintel_central_data`, {
+      headers: { Authorization: `Bearer ${creds.token}` },
       cache: "no-store",
       signal: controller.signal,
     });
@@ -55,14 +98,16 @@ async function loadFromUpstash(): Promise<CentralData | null> {
 
 // Helper: save to Upstash Redis / Vercel KV if configured
 async function saveToUpstash(data: CentralData): Promise<boolean> {
-  if (!UPSTASH_URL || !UPSTASH_TOKEN) return false;
+  const creds = getRedisCredentials();
+  if (!creds) return false;
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3500);
   try {
-    const res = await fetch(`${UPSTASH_URL}/set/fieldintel_central_data`, {
+    const res = await fetch(`${creds.url}/set/fieldintel_central_data`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${UPSTASH_TOKEN}`,
+        Authorization: `Bearer ${creds.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),

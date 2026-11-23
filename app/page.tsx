@@ -65,12 +65,41 @@ export default function Home() {
       }).catch((err) => console.warn("Background initial sync failed:", err));
     }
 
+    // Auto-sync when phone reconnects to internet
+    const handleOnline = () => {
+      const activeRep = localStorage.getItem("fieldintel_active_rep_v3") || "";
+      if (activeRep.trim()) {
+        syncWithCentralRepo(activeRep.trim(), false)
+          .then((res) => {
+            if (res.success) {
+              setAllAudits(res.audits);
+              setStores(res.stores);
+              if (res.categories) setCustomCategories(res.categories);
+              if (res.brands) setCustomBrands(res.brands);
+              setSyncToast("Online: Field audits synced to Central Database!");
+              setTimeout(() => setSyncToast(null), 3000);
+            }
+          })
+          .catch(() => {});
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+    }
+
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
         .then((reg) => console.log("PWA Service Worker registered:", reg.scope))
         .catch((err) => console.error("SW registration failed:", err));
     }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+      }
+    };
   }, []);
 
   const handleSaveRepName = (e: React.FormEvent) => {
