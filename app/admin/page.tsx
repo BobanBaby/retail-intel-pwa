@@ -910,6 +910,14 @@ export default function AdminPage() {
         </div>
       </nav>
 
+      {/* Real-time Server Sync Loading Indicator */}
+      {syncing && (
+        <div className="bg-blue-600 text-white text-xs font-semibold py-2 px-4 text-center flex items-center justify-center space-x-2 shadow-xs animate-pulse sticky top-[105px] z-20">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+          <span>Synchronizing live audit records and store data from Central Server...</span>
+        </div>
+      )}
+
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* Multi-Device Cloud Persistence Notice (Vercel Serverless Stateless containers) */}
@@ -1153,6 +1161,12 @@ export default function AdminPage() {
                     <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
                       {filteredAudits.length} Records
                     </span>
+                    {syncing && (
+                      <span className="inline-flex items-center space-x-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-semibold animate-pulse">
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                        <span>Updating from Server...</span>
+                      </span>
+                    )}
                   </h2>
                   <p className="text-xs text-slate-500">
                     Full survey data submitted across all field sales beats &bull; Manage or delete

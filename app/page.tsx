@@ -21,7 +21,7 @@ import {
   getCustomBrands,
   saveCustomBrand,
 } from "@/lib/storage";
-import { UserCheck, Sparkles, ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
+import { UserCheck, Sparkles, ArrowRight, ShieldCheck, Smartphone, RefreshCw } from "lucide-react";
 
 export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>("audit");
@@ -34,6 +34,7 @@ export default function Home() {
   const [tempRepInput, setTempRepInput] = useState("");
   const [preselectedStoreId, setPreselectedStoreId] = useState<string | undefined>(undefined);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isServerSyncing, setIsServerSyncing] = useState<boolean>(true);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
   // Initialize data and check if rep name is preset
@@ -55,14 +56,20 @@ export default function Home() {
 
     // Auto-fetch latest audits & network catalog from Central Server on load
     if (savedRep.trim()) {
-      syncWithCentralRepo(savedRep.trim(), false).then((res) => {
-        if (res.success) {
-          setAllAudits(res.audits);
-          setStores(res.stores);
-          if (res.categories) setCustomCategories(res.categories);
-          if (res.brands) setCustomBrands(res.brands);
-        }
-      }).catch((err) => console.warn("Background initial sync failed:", err));
+      setIsServerSyncing(true);
+      syncWithCentralRepo(savedRep.trim(), false)
+        .then((res) => {
+          if (res.success) {
+            setAllAudits(res.audits);
+            setStores(res.stores);
+            if (res.categories) setCustomCategories(res.categories);
+            if (res.brands) setCustomBrands(res.brands);
+          }
+        })
+        .catch((err) => console.warn("Background initial sync failed:", err))
+        .finally(() => setIsServerSyncing(false));
+    } else {
+      setIsServerSyncing(false);
     }
 
     // Auto-sync when phone reconnects to internet
@@ -273,6 +280,14 @@ export default function Home() {
         repName={repName}
         setRepName={handleSetRepName}
       />
+
+      {/* Real-time Server Sync Loading Indicator */}
+      {isServerSyncing && (
+        <div className="bg-blue-600 text-white text-[11px] font-semibold py-1.5 px-4 flex items-center justify-center space-x-2 animate-pulse shadow-xs">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+          <span>Syncing with Central Server &amp; loading latest audits...</span>
+        </div>
+      )}
 
       {/* Sync Toast Feedback */}
       {syncToast && (
