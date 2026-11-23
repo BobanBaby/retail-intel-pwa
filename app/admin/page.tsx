@@ -37,6 +37,8 @@ import {
   FolderPlus,
   Sparkles,
   ShoppingBag,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import {
   AuditRecord,
@@ -502,17 +504,19 @@ export default function AdminPage() {
     ...Array.from(new Set(audits.map((a) => a.category).filter(Boolean))),
   ];
 
-  const filteredAudits = audits.filter((a) => {
-    const matchRep = selectedRep === "All" || a.repName === selectedRep;
-    const matchDistrict = selectedDistrict === "All" || a.district === selectedDistrict;
-    const matchCategory = selectedCategory === "All" || a.category === selectedCategory;
-    const matchSearch =
-      a.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.area.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.repName.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchRep && matchDistrict && matchCategory && matchSearch;
-  });
+  const filteredAudits = audits
+    .filter((a) => {
+      const matchRep = selectedRep === "All" || a.repName === selectedRep;
+      const matchDistrict = selectedDistrict === "All" || a.district === selectedDistrict;
+      const matchCategory = selectedCategory === "All" || a.category === selectedCategory;
+      const matchSearch =
+        a.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.area.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.repName.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchRep && matchDistrict && matchCategory && matchSearch;
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   // KPI Calculations
   const totalAuditsCount = audits.length;
@@ -1223,6 +1227,7 @@ export default function AdminPage() {
                       <th className="pb-2 text-right">Cost</th>
                       <th className="pb-2 text-right">Margin %</th>
                       <th className="pb-2 text-center">Facings</th>
+                      <th className="pb-2 whitespace-nowrap">Date &amp; Time</th>
                       <th className="pb-2">Submitted By</th>
                       <th className="pb-2 text-right">Action</th>
                     </tr>
@@ -1253,6 +1258,22 @@ export default function AdminPage() {
                         </td>
                         <td className="py-2.5 text-center font-bold text-slate-800">
                           {a.shelfFacings}
+                        </td>
+                        <td className="py-2.5 whitespace-nowrap">
+                          <span className="font-bold text-slate-900 block text-xs">
+                            {new Date(a.createdAt).toLocaleDateString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium block">
+                            {new Date(a.createdAt).toLocaleTimeString("en-IN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
+                          </span>
                         </td>
                         <td className="py-2.5 font-bold text-indigo-700">{a.repName}</td>
                         <td className="py-2.5 text-right">

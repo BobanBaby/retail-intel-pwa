@@ -215,9 +215,23 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
                 )}
 
                 {/* Bottom Row Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-400">
-                  <span>Rep: {item.repName}</span>
-                  <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                  <div className="flex items-center space-x-1.5 flex-wrap">
+                    <span className="font-semibold text-slate-700">{item.repName}</span>
+                    <span>&bull;</span>
+                    <span className="text-slate-500 font-medium">
+                      {new Date(item.createdAt).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                      })}{", "}
+                      {new Date(item.createdAt).toLocaleTimeString("en-IN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2 shrink-0">
                     <button
                       onClick={() => setActiveDetailAudit(item)}
                       className="text-blue-600 hover:text-blue-700 font-semibold flex items-center space-x-1"
@@ -309,6 +323,25 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
                 <div>
                   <span className="text-slate-400 text-[10px] block">Shelf Position</span>
                   <span className="font-semibold">{activeDetailAudit.shelfPosition}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block">Date &amp; Time</span>
+                  <span className="font-semibold text-slate-800">
+                    {new Date(activeDetailAudit.createdAt).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}{", "}
+                    {new Date(activeDetailAudit.createdAt).toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block">Field Representative</span>
+                  <span className="font-bold text-indigo-700">{activeDetailAudit.repName}</span>
                 </div>
               </div>
 
