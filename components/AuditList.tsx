@@ -186,7 +186,9 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
                 <div className="grid grid-cols-3 gap-2 text-center text-[11px] mb-2.5">
                   <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                     <span className="text-[10px] text-slate-400 block font-medium">Retailer Margin</span>
-                    <span className="font-bold text-emerald-600">{item.retailerMarginPct}%</span>
+                    <span className="font-bold text-emerald-600">
+                      {item.retailerMarginPct > 0 ? `${item.retailerMarginPct}%` : "Not Disclosed"}
+                    </span>
                   </div>
                   <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                     <span className="text-[10px] text-slate-400 block font-medium">Shelf Facings</span>
@@ -195,7 +197,7 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
                   <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                     <span className="text-[10px] text-slate-400 block font-medium">Velocity</span>
                     <span className="font-bold text-slate-800 truncate block">
-                      {item.turnoverSpeed.split(" ")[0]}
+                      {item.turnoverSpeed?.includes("Not Assessed") ? "Unassessed" : item.turnoverSpeed?.split(" ")[0] || "—"}
                     </span>
                   </div>
                 </div>
@@ -307,13 +309,16 @@ export default function AuditList({ audits, onDeleteAudit }: AuditListProps) {
                 </div>
                 <div>
                   <span className="text-slate-400 text-[10px] block">Wholesale Landing</span>
-                  <span className="font-semibold">₹{activeDetailAudit.retailerCost}</span>
+                  <span className="font-semibold">
+                    {activeDetailAudit.retailerCost > 0 ? `₹${activeDetailAudit.retailerCost}` : "Not Disclosed"}
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-400 text-[10px] block">Retailer Margin</span>
                   <span className="font-semibold text-emerald-600">
-                    {activeDetailAudit.retailerMarginPct}% (₹
-                    {(activeDetailAudit.mrp - activeDetailAudit.retailerCost).toFixed(0)}/unit)
+                    {activeDetailAudit.retailerMarginPct > 0
+                      ? `${activeDetailAudit.retailerMarginPct}% (₹${(activeDetailAudit.mrp - activeDetailAudit.retailerCost).toFixed(0)}/unit)`
+                      : "Not Disclosed"}
                   </span>
                 </div>
                 <div>

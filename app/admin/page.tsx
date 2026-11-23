@@ -543,9 +543,10 @@ export default function AdminPage() {
   const uniqueDistrictsCount = new Set(stores.map((s) => s.district).filter(Boolean)).size;
   const uniqueRepsCount = new Set(audits.map((a) => a.repName).filter(Boolean)).size;
 
+  const validMarginAudits = audits.filter((a) => a.retailerMarginPct > 0);
   const avgMargin =
-    audits.length > 0
-      ? (audits.reduce((acc, a) => acc + a.retailerMarginPct, 0) / audits.length).toFixed(1)
+    validMarginAudits.length > 0
+      ? (validMarginAudits.reduce((acc, a) => acc + a.retailerMarginPct, 0) / validMarginAudits.length).toFixed(1)
       : "0";
 
   // Rep Performance Table
@@ -586,16 +587,19 @@ export default function AdminPage() {
   // District Penetration Table
   const districtStatsMap: Record<
     string,
-    { auditsCount: number; storesCount: number; avgMarginSum: number }
+    { auditsCount: number; storesCount: number; avgMarginSum: number; marginCount: number }
   > = {};
 
   audits.forEach((a) => {
     const d = a.district || "Unassigned";
     if (!districtStatsMap[d]) {
-      districtStatsMap[d] = { auditsCount: 0, storesCount: 0, avgMarginSum: 0 };
+      districtStatsMap[d] = { auditsCount: 0, storesCount: 0, avgMarginSum: 0, marginCount: 0 };
     }
     districtStatsMap[d].auditsCount += 1;
-    districtStatsMap[d].avgMarginSum += a.retailerMarginPct;
+    if (a.retailerMarginPct > 0) {
+      districtStatsMap[d].avgMarginSum += a.retailerMarginPct;
+      districtStatsMap[d].marginCount += 1;
+    }
   });
 
   stores.forEach((s) => {
@@ -610,7 +614,7 @@ export default function AdminPage() {
       district,
       auditsCount: data.auditsCount,
       storesCount: data.storesCount || 1,
-      avgMargin: (data.avgMarginSum / data.auditsCount).toFixed(1),
+      avgMargin: data.marginCount > 0 ? (data.avgMarginSum / data.marginCount).toFixed(1) : "—",
     }))
     .sort((a, b) => b.auditsCount - a.auditsCount);
 
@@ -1290,10 +1294,10 @@ export default function AdminPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-black text-slate-900 whitespace-nowrap">₹{a.mrp}</td>
                           <td className="py-3 px-3 text-right font-semibold text-slate-600 whitespace-nowrap">
-                            ₹{a.retailerCost}
+                            {a.retailerCost > 0 ? `₹${a.retailerCost}` : <span className="text-slate-400 font-normal italic text-[11px]">Not Disclosed</span>}
                           </td>
                           <td className="py-3 px-3 text-right font-black text-emerald-600 whitespace-nowrap">
-                            {a.retailerMarginPct}%
+                            {a.retailerMarginPct > 0 ? `${a.retailerMarginPct}%` : <span className="text-slate-400 font-normal italic text-[11px]">Not Disclosed</span>}
                           </td>
                           <td className="py-3 px-3 text-center font-bold text-slate-800">
                             {a.shelfFacings}

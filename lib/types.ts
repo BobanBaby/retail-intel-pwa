@@ -33,7 +33,8 @@ export type ShelfPosition =
 export type TurnoverSpeed =
   | "Fast (>5 units/wk)"
   | "Moderate (2-5 units/wk)"
-  | "Slow (<2 units/wk)";
+  | "Slow (<2 units/wk)"
+  | "Not Assessed / Unknown";
 
 export type UnitType = "ml" | "gm" | "kg" | "litres" | "pcs / sachet";
 

@@ -19,6 +19,7 @@ import {
   Phone,
   User,
   SlidersHorizontal,
+  AlertTriangle,
 } from "lucide-react";
 import {
   AuditRecord,
@@ -67,6 +68,7 @@ const SHELF_POSITIONS: ShelfPosition[] = [
 ];
 
 const TURNOVER_SPEEDS: TurnoverSpeed[] = [
+  "Not Assessed / Unknown",
   "Fast (>5 units/wk)",
   "Moderate (2-5 units/wk)",
   "Slow (<2 units/wk)",
@@ -405,10 +407,10 @@ export default function AuditForm({
     setPackSize(defSize);
     setCustomPackSize("");
     const estMrp = Math.round(defSize * 1.5);
-    const estCost = Math.round(estMrp * (1 - item.typicalMargin / 100));
     setMrp(String(estMrp));
-    setRetailerCost(String(estCost));
-    setCustomerPrice(String(estMrp));
+    setCustomCostInput("");
+    setIsDiscounted(false);
+    setCustomDiscountPrice("");
     setShowBrandSearchModal(false);
     setBrandSearchQuery("");
   };
@@ -424,13 +426,16 @@ export default function AuditForm({
 
   // Pricing State
   const [mrp, setMrp] = useState<string>("199");
-  const [retailerCost, setRetailerCost] = useState<string>("155");
-  const [customerPrice, setCustomerPrice] = useState<string>("199");
+  const [costMode, setCostMode] = useState<"benchmark" | "preset_margin" | "exact_cost" | "undisclosed">("benchmark");
+  const [marginPreset, setMarginPreset] = useState<number>(20);
+  const [customCostInput, setCustomCostInput] = useState<string>("");
+  const [isDiscounted, setIsDiscounted] = useState<boolean>(false);
+  const [customDiscountPrice, setCustomDiscountPrice] = useState<string>("");
 
   // Merchandising State
-  const [shelfFacings, setShelfFacings] = useState<number>(6);
+  const [shelfFacings, setShelfFacings] = useState<number>(2);
   const [shelfPosition, setShelfPosition] = useState<ShelfPosition>("Eye Level (Prime)");
-  const [turnoverSpeed, setTurnoverSpeed] = useState<TurnoverSpeed>("Fast (>5 units/wk)");
+  const [turnoverSpeed, setTurnoverSpeed] = useState<TurnoverSpeed>("Not Assessed / Unknown");
 
   // Photo & Notes
   const [photoData, setPhotoData] = useState<string | null>(null);
@@ -446,6 +451,7 @@ export default function AuditForm({
 
   // Active Brand in selected category
   const activeBrandConfig = selectedCategory.brands.find((b) => b.brand === selectedBrand);
+  const benchmarkMargin = activeBrandConfig?.typicalMargin || 20;
 
   // Handle Category Change
   const handleSelectCategory = (cat: ProductCategoryConfig) => {
@@ -459,10 +465,10 @@ export default function AuditForm({
       setPackSize(defSize);
       setCustomPackSize("");
       const estMrp = Math.round(defSize * 1.5);
-      const estCost = Math.round(estMrp * (1 - firstBrand.typicalMargin / 100));
       setMrp(String(estMrp));
-      setRetailerCost(String(estCost));
-      setCustomerPrice(String(estMrp));
+      setCustomCostInput("");
+      setIsDiscounted(false);
+      setCustomDiscountPrice("");
     } else {
       setSelectedBrand("Other");
       setVariant("");
@@ -481,20 +487,45 @@ export default function AuditForm({
       setPackSize(defSize);
       setCustomPackSize("");
       const estMrp = Math.round(defSize * 1.5);
-      const estCost = Math.round(estMrp * (1 - bConfig.typicalMargin / 100));
       setMrp(String(estMrp));
-      setRetailerCost(String(estCost));
-      setCustomerPrice(String(estMrp));
+      setCustomCostInput("");
+      setIsDiscounted(false);
+      setCustomDiscountPrice("");
     }
   };
 
-  // Compute Margin %
+  // Compute MRP & Margins dynamically
   const mrpNum = parseFloat(mrp) || 0;
-  const costNum = parseFloat(retailerCost) || 0;
-  const marginPct =
-    mrpNum > 0 && costNum > 0 && mrpNum >= costNum
-      ? ((mrpNum - costNum) / mrpNum) * 100
-      : 0;
+
+  let costNum = 0;
+  let marginPct = 0;
+
+  if (costMode === "undisclosed") {
+    costNum = 0;
+    marginPct = 0;
+  } else if (costMode === "benchmark") {
+    costNum = mrpNum > 0 ? Math.round(mrpNum * (1 - benchmarkMargin / 100)) : 0;
+    marginPct = benchmarkMargin;
+  } else if (costMode === "preset_margin") {
+    costNum = mrpNum > 0 ? Math.round(mrpNum * (1 - marginPreset / 100)) : 0;
+    marginPct = marginPreset;
+  } else if (costMode === "exact_cost") {
+    costNum = parseFloat(customCostInput) || 0;
+    marginPct =
+      mrpNum > 0 && costNum > 0 && mrpNum >= costNum
+        ? ((mrpNum - costNum) / mrpNum) * 100
+        : 0;
+  }
+
+  // Cost validation guardrail
+  const isCostExceedingMrp = costMode === "exact_cost" && costNum > mrpNum && mrpNum > 0;
+  const isDiscountInvalid = isDiscounted && parseFloat(customDiscountPrice) > mrpNum && mrpNum > 0;
+
+  // Final selling price
+  const customerPriceNum =
+    isDiscounted && parseFloat(customDiscountPrice) > 0
+      ? parseFloat(customDiscountPrice)
+      : mrpNum;
 
   // Unit rate calculation
   const effectiveSize = packSize === 0 ? parseFloat(customPackSize) || 1 : packSize;
@@ -600,7 +631,7 @@ export default function AuditForm({
       mrp: mrpNum,
       retailerCost: costNum,
       retailerMarginPct: parseFloat(marginPct.toFixed(2)),
-      customerPrice: parseFloat(customerPrice) || mrpNum,
+      customerPrice: customerPriceNum,
       shelfFacings: shelfFacings,
       shelfPosition: shelfPosition,
       turnoverSpeed: turnoverSpeed,
@@ -1004,144 +1035,324 @@ export default function AuditForm({
         </div>
 
         {/* SECTION 4: PRICING & RETAILER MARGIN */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 block flex items-center justify-between">
-            <span className="flex items-center space-x-1.5">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
               <span>4. Pricing &amp; Trade Margin</span>
             </span>
             <span className="text-[11px] text-slate-500 font-normal">
               Rate: <span className="font-bold text-slate-800">₹{unitRate}</span> {rateLabel}
             </span>
-          </label>
+          </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
-                Printed MRP (₹)
+          {/* Primary Field: Printed MRP (Directly read from physical pack) */}
+          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-slate-900 font-bold flex items-center space-x-1">
+                <span>Printed MRP on Packet (₹)</span>
+                <span className="text-rose-500">*</span>
               </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2 text-slate-400 text-sm font-semibold">₹</span>
-                <input
-                  type="number"
-                  value={mrp}
-                  onChange={(e) => setMrp(e.target.value)}
-                  placeholder="199"
-                  className="w-full text-base font-bold text-slate-900 border border-slate-300 rounded-xl pl-7 pr-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                  required
-                />
-              </div>
+              <span className="text-[10px] text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md font-semibold">
+                Directly from pack sticker
+              </span>
             </div>
-
-            <div>
-              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
-                Wholesale Landing Cost (₹)
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2 text-slate-400 text-sm font-semibold">₹</span>
-                <input
-                  type="number"
-                  value={retailerCost}
-                  onChange={(e) => setRetailerCost(e.target.value)}
-                  placeholder="150"
-                  className="w-full text-base font-bold text-slate-900 border border-slate-300 rounded-xl pl-7 pr-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                  required
-                />
-              </div>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-slate-400 text-lg font-bold">₹</span>
+              <input
+                type="number"
+                min="1"
+                value={mrp}
+                onChange={(e) => setMrp(e.target.value)}
+                placeholder="199"
+                className="w-full text-xl font-black text-slate-900 border border-slate-300 rounded-xl pl-8 pr-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                required
+              />
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-medium text-slate-500 block">Retailer Margin</span>
-              <span
-                className={`text-lg font-black tracking-tight ${
-                  marginPct >= 25
-                    ? "text-emerald-600"
-                    : marginPct >= 18
-                    ? "text-blue-600"
-                    : "text-amber-600"
-                }`}
-              >
-                {marginPct.toFixed(1)}%
-              </span>
-              <span className="text-[11px] text-slate-400 ml-1.5">
-                (₹{(mrpNum - costNum).toFixed(0)} / pack)
-              </span>
+          {/* Wholesale Cost & Margin Section */}
+          <div className="border border-slate-200 rounded-xl p-3 bg-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+              <div>
+                <span className="text-[11px] font-bold text-slate-800 block">
+                  Wholesale Cost &amp; Trade Margin
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Wholesale bill is not on the box. Choose how to record trade terms:
+                </span>
+              </div>
             </div>
 
-            <div className="w-1/2">
-              <label className="text-[10px] text-slate-500 font-semibold mb-0.5 block">
-                Selling Price (Retail)
-              </label>
-              <div className="relative">
-                <span className="absolute left-2.5 top-1 text-slate-400 text-xs">₹</span>
-                <input
-                  type="number"
-                  value={customerPrice}
-                  onChange={(e) => setCustomerPrice(e.target.value)}
-                  className="w-full text-xs font-semibold border border-slate-300 rounded-lg pl-6 pr-2 py-1 text-slate-800"
-                />
-              </div>
-              {parseFloat(customerPrice) < mrpNum && (
-                <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5">
-                  Retailer discounts ₹{(mrpNum - parseFloat(customerPrice)).toFixed(0)} below MRP
-                </span>
-              )}
+            {/* Mode Selector Chips */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-3">
+              <button
+                type="button"
+                onClick={() => setCostMode("benchmark")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold border transition text-center ${
+                  costMode === "benchmark"
+                    ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                ✨ Benchmark (~{benchmarkMargin}%)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCostMode("undisclosed")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold border transition text-center ${
+                  costMode === "undisclosed"
+                    ? "bg-amber-600 border-amber-600 text-white shadow-xs"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                🚫 Not Disclosed
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCostMode("preset_margin")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold border transition text-center ${
+                  costMode === "preset_margin"
+                    ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                🎯 1-Tap Margin %
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCostMode("exact_cost")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold border transition text-center ${
+                  costMode === "exact_cost"
+                    ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                ₹ Invoice Cost
+              </button>
             </div>
+
+            {/* Mode Content */}
+            {costMode === "benchmark" && (
+              <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-2.5">
+                <span className="text-[10px] text-blue-700 font-semibold block">
+                  Auto-estimated using {activeBrandConfig?.brand || selectedBrand} FMCG benchmark margin (~{benchmarkMargin}%)
+                </span>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1">
+                  <span className="text-sm font-black text-slate-900">
+                    Est. Wholesale Cost: ₹{costNum}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600">
+                    Retailer Margin: {marginPct}%
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    (₹{mrpNum > 0 ? (mrpNum - costNum).toFixed(0) : 0} profit / pack)
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {costMode === "undisclosed" && (
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-900 leading-snug">
+                <span className="font-bold block text-amber-800">
+                  ✓ Recorded as Printed MRP only (No Guesswork / No Junk Data)
+                </span>
+                Wholesale cost was not disclosed by shopkeeper. Margin will be saved as{" "}
+                <span className="font-semibold italic">Not Disclosed</span> without polluting analytics or averages.
+              </div>
+            )}
+
+            {costMode === "preset_margin" && (
+              <div>
+                <span className="text-[10px] text-slate-500 font-semibold mb-1 block">
+                  Tap retailer trade margin (wholesale cost calculates automatically):
+                </span>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[12, 15, 18, 20, 22, 25, 30].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setMarginPreset(pct)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-bold transition ${
+                        marginPreset === pct
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs flex items-center justify-between font-semibold">
+                  <span>Computed Landing Cost: <strong className="text-slate-900">₹{costNum}</strong></span>
+                  <span className="text-emerald-600">Margin: {marginPreset}%</span>
+                </div>
+              </div>
+            )}
+
+            {costMode === "exact_cost" && (
+              <div>
+                <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
+                  Retailer Wholesale Landing Cost (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-slate-400 text-sm font-semibold">₹</span>
+                  <input
+                    type="number"
+                    value={customCostInput}
+                    onChange={(e) => setCustomCostInput(e.target.value)}
+                    placeholder="e.g. 155"
+                    className="w-full text-base font-bold text-slate-900 border border-slate-300 rounded-xl pl-7 pr-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+                {isCostExceedingMrp && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1 flex items-center space-x-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Wholesale cost (₹{costNum}) cannot exceed Printed MRP (₹{mrpNum}).</span>
+                  </p>
+                )}
+                {costNum > 0 && !isCostExceedingMrp && (
+                  <p className="text-[11px] text-emerald-600 font-bold mt-1">
+                    Margin: {marginPct.toFixed(1)}% (₹{(mrpNum - costNum).toFixed(0)} / pack)
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Customer Selling Price: Defaults to MRP */}
+          <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-800 block">
+                  Customer Selling Price
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {isDiscounted
+                    ? `Discounted consumer rate: ₹${customerPriceNum}`
+                    : `Sold at standard Printed MRP (₹${mrpNum})`}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsDiscounted(!isDiscounted)}
+                className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition ${
+                  isDiscounted
+                    ? "bg-amber-100 border-amber-300 text-amber-900"
+                    : "bg-white border-slate-300 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {isDiscounted ? "Discount Active" : "+ Add Store Discount"}
+              </button>
+            </div>
+
+            {isDiscounted && (
+              <div className="mt-2 pt-2 border-t border-slate-200">
+                <label className="text-[10px] text-slate-600 font-semibold mb-1 block">
+                  Store Selling Price (₹ below MRP)
+                </label>
+                <div className="relative max-w-xs">
+                  <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">₹</span>
+                  <input
+                    type="number"
+                    value={customDiscountPrice}
+                    onChange={(e) => setCustomDiscountPrice(e.target.value)}
+                    placeholder={String(mrpNum)}
+                    className="w-full text-xs font-bold border border-slate-300 rounded-lg pl-6 pr-2 py-1.5 text-slate-900"
+                  />
+                </div>
+                {isDiscountInvalid && (
+                  <p className="text-[10px] text-rose-600 font-semibold mt-1">
+                    Selling price cannot exceed Printed MRP.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* SECTION 5: SHELF VISIBILITY */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 block">
+        {/* SECTION 5: SHELF VISIBILITY & SALES VELOCITY */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
             5. Shelf Visibility &amp; Sales Velocity
           </label>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Shelf Facings */}
             <div>
-              <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
-                Shelf Facings (Front Row)
-              </label>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] text-slate-600 font-semibold">
+                  Shelf Facings (Front Row)
+                </label>
+                <span className="text-[10px] text-slate-400">Packs facing customer</span>
+              </div>
+              <div className="flex items-center space-x-1.5 mb-1.5">
                 <button
                   type="button"
                   onClick={() => setShelfFacings((c) => Math.max(1, c - 1))}
-                  className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-300 text-slate-700 font-bold text-lg flex items-center justify-center active:bg-slate-200"
+                  className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-300 text-slate-700 font-bold text-base flex items-center justify-center active:bg-slate-200"
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-black text-lg text-slate-800">
-                  {shelfFacings}
+                <span className="flex-1 text-center font-black text-base text-slate-900 bg-slate-50 border border-slate-200 py-1.5 rounded-xl">
+                  {shelfFacings} pack{shelfFacings > 1 ? "s" : ""}
                 </span>
                 <button
                   type="button"
                   onClick={() => setShelfFacings((c) => c + 1)}
-                  className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-300 text-blue-700 font-bold text-lg flex items-center justify-center active:bg-blue-100"
+                  className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-300 text-blue-700 font-bold text-base flex items-center justify-center active:bg-blue-100"
                 >
                   +
                 </button>
               </div>
+              {/* Quick facing count chips */}
+              <div className="flex space-x-1">
+                {[1, 2, 3, 4, 6].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setShelfFacings(num)}
+                    className={`flex-1 text-[10px] py-0.5 rounded-md border font-semibold ${
+                      shelfFacings === num
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
             </div>
 
+            {/* Turnover Velocity */}
             <div>
               <label className="text-[11px] text-slate-600 font-semibold mb-1 block">
                 Turnover Velocity
               </label>
-              <select
-                value={turnoverSpeed}
-                onChange={(e) => setTurnoverSpeed(e.target.value as TurnoverSpeed)}
-                className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2.5 text-slate-800 focus:outline-hidden"
-              >
+              <div className="grid grid-cols-2 gap-1.5">
                 {TURNOVER_SPEEDS.map((sp) => (
-                  <option key={sp} value={sp}>
-                    {sp}
-                  </option>
+                  <button
+                    key={sp}
+                    type="button"
+                    onClick={() => setTurnoverSpeed(sp)}
+                    className={`text-[10px] py-1.5 px-2 rounded-lg border font-semibold text-center transition ${
+                      turnoverSpeed === sp
+                        ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {sp.includes("Not Assessed") ? "Not Assessed" : sp}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
           </div>
 
+          {/* Placement Position */}
           <div>
             <label className="text-[11px] text-slate-600 font-semibold mb-1.5 block">
               Placement Position
@@ -1243,14 +1454,24 @@ export default function AuditForm({
         {/* SUBMIT BUTTON */}
         <button
           type="submit"
-          disabled={stores.length === 0}
+          disabled={stores.length === 0 || mrpNum <= 0 || isCostExceedingMrp || isDiscountInvalid}
           className={`w-full font-bold text-sm py-3.5 px-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-2 ${
-            stores.length === 0
+            stores.length === 0 || mrpNum <= 0 || isCostExceedingMrp || isDiscountInvalid
               ? "bg-slate-300 text-slate-500 cursor-not-allowed"
               : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white active:scale-[0.99]"
           }`}
         >
-          <span>{stores.length === 0 ? "Please Register Shop First" : "Save Competitor Audit"}</span>
+          <span>
+            {stores.length === 0
+              ? "Please Register Shop First"
+              : isCostExceedingMrp
+              ? "Wholesale Cost Exceeds MRP"
+              : isDiscountInvalid
+              ? "Selling Price Exceeds MRP"
+              : mrpNum <= 0
+              ? "Enter Printed MRP"
+              : "Save Competitor Audit"}
+          </span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </form>
