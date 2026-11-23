@@ -218,7 +218,7 @@ export default function ShopsDirectory({
             >
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">{shop.name}</h3>
+                  <h3 className="text-base font-extrabold text-slate-900 break-words">{shop.name}</h3>
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
                     <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
                       {shop.district}
