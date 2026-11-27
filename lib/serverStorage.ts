@@ -13,6 +13,7 @@ export interface CentralData {
   customCategories?: CustomCategoryEntry[];
   customBrands?: CustomBrandEntry[];
   adminPin?: string;
+  allowRepAddCategory?: boolean;
   lastUpdated: string;
 }
 
@@ -301,11 +302,23 @@ export async function getCentralAdminPinAsync(): Promise<string> {
   return data.adminPin || "9999";
 }
 
+export async function setCentralCategoryPolicyAsync(allowed: boolean): Promise<boolean> {
+  const data = await getCentralDataAsync();
+  const updated: CentralData = {
+    ...data,
+    allowRepAddCategory: Boolean(allowed),
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return Boolean(allowed);
+}
+
 export async function syncCentralDataAsync(
   incomingAudits: AuditRecord[],
   incomingStores: Store[],
   incomingCategories: CustomCategoryEntry[] = [],
-  incomingBrands: CustomBrandEntry[] = []
+  incomingBrands: CustomBrandEntry[] = [],
+  isAdmin: boolean = false
 ): Promise<{
   audits: AuditRecord[];
   stores: Store[];
@@ -313,8 +326,10 @@ export async function syncCentralDataAsync(
   brands: CustomBrandEntry[];
   addedAuditsCount: number;
   addedStoresCount: number;
+  allowRepAddCategory: boolean;
 }> {
   const current = await getCentralDataAsync();
+  const isRepCategoryAllowed = Boolean(current.allowRepAddCategory);
 
   // 1. Merge Stores
   const storeMap = new Map<string, Store>();
@@ -338,16 +353,19 @@ export async function syncCentralDataAsync(
     auditMap.set(a.id, { ...a, synced: true });
   });
 
-  // 3. Merge Custom Categories
+  // 3. Merge Custom Categories (Only allowed if admin or category creation is unlocked for reps)
   const categoryMap = new Map<string, CustomCategoryEntry>();
   (current.customCategories || []).forEach((c) =>
     categoryMap.set(c.name.trim().toLowerCase(), c)
   );
-  incomingCategories.forEach((c) => {
-    if (c && c.name) {
-      categoryMap.set(c.name.trim().toLowerCase(), c);
-    }
-  });
+
+  if (isRepCategoryAllowed || isAdmin) {
+    incomingCategories.forEach((c) => {
+      if (c && c.name) {
+        categoryMap.set(c.name.trim().toLowerCase(), c);
+      }
+    });
+  }
 
   // 4. Merge Custom Brands
   const brandMap = new Map<string, CustomBrandEntry>();
@@ -368,7 +386,7 @@ export async function syncCentralDataAsync(
     }
   });
 
-  // 5. Automatically harvest new categories, brands, variants from all incoming & existing audits!
+  // 5. Automatically harvest brands and variants from audits (do NOT harvest rogue categories if locked!)
   auditMap.forEach((audit) => {
     if (!audit.category || !audit.brand || audit.brand === "Other") return;
     const catName = audit.category.trim();
@@ -376,16 +394,18 @@ export async function syncCentralDataAsync(
     const catKey = catName.toLowerCase();
     const brandKey = `${catKey}:::${brandName.toLowerCase()}`;
 
-    // Auto-record category if not standard
-    if (!categoryMap.has(catKey)) {
-      categoryMap.set(catKey, {
-        id: catName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        name: catName,
-        unit: audit.unit || "ml",
-        defaultSizes: audit.packSize ? [audit.packSize] : [100],
-        addedByRep: audit.repName,
-        createdAt: audit.createdAt,
-      });
+    // Auto-record category only if category policy is unlocked or admin enabled
+    if (isRepCategoryAllowed || isAdmin) {
+      if (!categoryMap.has(catKey)) {
+        categoryMap.set(catKey, {
+          id: catName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          name: catName,
+          unit: audit.unit || "ml",
+          defaultSizes: audit.packSize ? [audit.packSize] : [100],
+          addedByRep: audit.repName,
+          createdAt: audit.createdAt,
+        });
+      }
     }
 
     // Auto-record brand & variant
@@ -424,6 +444,8 @@ export async function syncCentralDataAsync(
     audits: mergedAudits,
     customCategories: mergedCategories,
     customBrands: mergedBrands,
+    adminPin: current.adminPin,
+    allowRepAddCategory: isRepCategoryAllowed,
     lastUpdated: new Date().toISOString(),
   };
 
@@ -436,5 +458,6 @@ export async function syncCentralDataAsync(
     brands: mergedBrands,
     addedAuditsCount,
     addedStoresCount,
+    allowRepAddCategory: isRepCategoryAllowed,
   };
 }

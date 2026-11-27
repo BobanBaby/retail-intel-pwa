@@ -8,6 +8,7 @@ import {
   deleteCentralStoreAsync,
   deleteCentralAuditAsync,
   setCentralAdminPinAsync,
+  setCentralCategoryPolicyAsync,
   isCloudStorageConfigured,
 } from "@/lib/serverStorage";
 
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
         categories: centralData.customCategories || [],
         brands: centralData.customBrands || [],
         adminPin,
+        allowRepAddCategory: Boolean(centralData.allowRepAddCategory),
         isCloudConfigured,
       });
     }
@@ -64,6 +66,7 @@ export async function GET(req: NextRequest) {
       stores: allStores,
       categories: centralData.customCategories || [],
       brands: centralData.customBrands || [],
+      allowRepAddCategory: Boolean(centralData.allowRepAddCategory),
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -93,6 +96,16 @@ export async function POST(req: NextRequest) {
         success: true,
         message: "Admin PIN updated successfully across the network",
         adminPin: updatedPin,
+      });
+    }
+
+    if (action === "set_category_policy") {
+      const { allowed } = body;
+      const updated = await setCentralCategoryPolicyAsync(Boolean(allowed));
+      return NextResponse.json({
+        success: true,
+        message: `Category creation policy updated: ${updated ? "Open to Reps" : "Locked (Admin Only)"}`,
+        allowRepAddCategory: updated,
       });
     }
 
@@ -160,7 +173,8 @@ export async function POST(req: NextRequest) {
       incomingAudits,
       incomingStores,
       incomingCategories,
-      incomingBrands
+      incomingBrands,
+      isAdmin
     );
 
     // If Admin, return full global organization data
@@ -177,6 +191,7 @@ export async function POST(req: NextRequest) {
         stores: result.stores,
         categories: result.categories,
         brands: result.brands,
+        allowRepAddCategory: result.allowRepAddCategory,
         isCloudConfigured: isCloudStorageConfigured(),
       });
     }
@@ -198,6 +213,7 @@ export async function POST(req: NextRequest) {
       stores: result.stores,
       categories: result.categories,
       brands: result.brands,
+      allowRepAddCategory: result.allowRepAddCategory,
     });
   } catch (err: any) {
     return NextResponse.json(

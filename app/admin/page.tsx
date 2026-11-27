@@ -20,6 +20,7 @@ import {
   RefreshCw,
   FileSpreadsheet,
   Lock,
+  Unlock,
   KeyRound,
   ShieldAlert,
   LogOut,
@@ -71,6 +72,8 @@ import {
   saveStore,
   getAdminPin,
   saveAdminPin,
+  saveAllowRepAddCategory,
+  getAllowRepAddCategory,
 } from "@/lib/storage";
 
 // Default admin PIN for security
@@ -90,6 +93,8 @@ export default function AdminPage() {
   const [audits, setAudits] = useState<AuditRecord[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategoryEntry[]>([]);
   const [customBrands, setCustomBrands] = useState<CustomBrandEntry[]>([]);
+  const [allowRepAddCategory, setAllowRepAddCategory] = useState<boolean>(false);
+  const [isUpdatingPolicy, setIsUpdatingPolicy] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [isCloudConfigured, setIsCloudConfigured] = useState<boolean>(true);
@@ -185,6 +190,9 @@ export default function AdminPage() {
         if (data.isCloudConfigured !== undefined) {
           setIsCloudConfigured(data.isCloudConfigured);
         }
+        if (data.allowRepAddCategory !== undefined) {
+          setAllowRepAddCategory(data.allowRepAddCategory);
+        }
       } else {
         setAudits(getAudits());
         setStores(getStores());
@@ -251,8 +259,8 @@ export default function AdminPage() {
               if (data.categories) setCustomCategories(data.categories);
               if (data.brands) setCustomBrands(data.brands);
               if (data.adminPin) setAdminPinState(data.adminPin);
-        if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
               if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
+              if (data.allowRepAddCategory !== undefined) setAllowRepAddCategory(data.allowRepAddCategory);
             }
           })
           .catch(() => {});
@@ -322,11 +330,25 @@ export default function AdminPage() {
         setCustomBrands(data.brands || []);
         if (data.adminPin) setAdminPinState(data.adminPin);
         if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
+        if (data.allowRepAddCategory !== undefined) setAllowRepAddCategory(data.allowRepAddCategory);
       }
     } catch (e) {
       console.warn("handleSyncData error:", e);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleToggleCategoryPolicy = async () => {
+    try {
+      setIsUpdatingPolicy(true);
+      const target = !allowRepAddCategory;
+      const updated = await saveAllowRepAddCategory(target);
+      setAllowRepAddCategory(updated);
+    } catch (err) {
+      console.error("Failed to toggle category policy:", err);
+    } finally {
+      setIsUpdatingPolicy(false);
     }
   };
 
@@ -1550,6 +1572,69 @@ export default function AdminPage() {
                   <span>+ Add Brand</span>
                 </button>
               </div>
+            </div>
+
+            {/* Sales Rep Category Creation Policy Card */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start space-x-3.5">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    allowRepAddCategory
+                      ? "bg-amber-100 text-amber-700 border border-amber-200"
+                      : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                  }`}
+                >
+                  {allowRepAddCategory ? (
+                    <Unlock className="w-5 h-5" />
+                  ) : (
+                    <Lock className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Sales Rep Category Creation Policy
+                    </h3>
+                    <span
+                      className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                        allowRepAddCategory
+                          ? "bg-amber-100 text-amber-800 border border-amber-300"
+                          : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      }`}
+                    >
+                      {allowRepAddCategory ? "Open to Reps" : "Locked (Admin Only)"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
+                    {allowRepAddCategory
+                      ? "Sales reps can register new product categories from their phone during store audits. (Can lead to typos and duplicate categories)."
+                      : "Recommended: Sales reps CANNOT add new categories. Only Executive Admin can create categories in Master Catalog, preventing misspelled or duplicate entries."}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleCategoryPolicy}
+                disabled={isUpdatingPolicy}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center space-x-2 shrink-0 cursor-pointer shadow-xs ${
+                  allowRepAddCategory
+                    ? "bg-slate-900 hover:bg-slate-800 text-white"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                }`}
+              >
+                {allowRepAddCategory ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>{isUpdatingPolicy ? "Updating..." : "Lock Category Creation"}</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    <span>{isUpdatingPolicy ? "Updating..." : "Unlock (Allow Reps to Add)"}</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Sub Tabs: All / Categories / Brands */}

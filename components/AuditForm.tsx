@@ -46,6 +46,7 @@ interface AuditFormProps {
   onAddCustomCategory?: (cat: CustomCategoryEntry) => void;
   onAddCustomBrand?: (brand: CustomBrandEntry) => void;
   allAudits?: AuditRecord[];
+  allowRepAddCategory?: boolean;
 }
 
 const COMMON_TAGS = [
@@ -96,6 +97,7 @@ export default function AuditForm({
   onAddCustomCategory,
   onAddCustomBrand,
   allAudits = [],
+  allowRepAddCategory = false,
 }: AuditFormProps) {
   // Store Selection State
   const [selectedStoreId, setSelectedStoreId] = useState<string>(
@@ -221,8 +223,8 @@ export default function AuditForm({
 
   // Dynamically build categories combining built-in categories, custom categories, custom brands, and audits
   const availableCategories = useMemo(() => {
-    return buildMergedProductCategories(customCategories, customBrands, allAudits);
-  }, [customCategories, customBrands, allAudits]);
+    return buildMergedProductCategories(customCategories, customBrands, allAudits, allowRepAddCategory);
+  }, [customCategories, customBrands, allAudits, allowRepAddCategory]);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
     availableCategories[0]?.id || "hair-spray"
@@ -658,7 +660,7 @@ export default function AuditForm({
       });
     }
 
-    if (onAddCustomCategory && finalCategory) {
+    if (allowRepAddCategory && onAddCustomCategory && finalCategory) {
       const exists = availableCategories.some(
         (c) => c.name.toLowerCase() === finalCategory.toLowerCase()
       );
@@ -715,14 +717,16 @@ export default function AuditForm({
               <Package className="w-3.5 h-3.5 text-blue-600" />
               <span>1. Product Category Being Launched / Audited</span>
             </label>
-            <button
-              type="button"
-              onClick={() => setShowNewCategoryModal(true)}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ New Category</span>
-            </button>
+            {allowRepAddCategory && (
+              <button
+                type="button"
+                onClick={() => setShowNewCategoryModal(true)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ New Category</span>
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-1.5 mb-2">
@@ -745,7 +749,7 @@ export default function AuditForm({
             })}
           </div>
 
-          {selectedCategory.id === "general-fmcg" && (
+          {allowRepAddCategory && (selectedCategory.id === "general-fmcg" || selectedCategory.id === "other-fmcg") && (
             <input
               type="text"
               value={customCategoryName}

@@ -12,6 +12,36 @@ const AUDITS_STORAGE_KEY = "fieldintel_audits_clean_v3";
 const CUSTOM_CATEGORIES_KEY = "fieldintel_custom_categories_v3";
 const CUSTOM_BRANDS_KEY = "fieldintel_custom_brands_v3";
 const ADMIN_PIN_STORAGE_KEY = "fieldintel_admin_custom_pin";
+const ALLOW_REP_CATEGORY_KEY = "fieldintel_allow_rep_category";
+
+export function getAllowRepAddCategory(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(ALLOW_REP_CATEGORY_KEY) === "true";
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function saveAllowRepAddCategory(allowed: boolean): Promise<boolean> {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(ALLOW_REP_CATEGORY_KEY, allowed ? "true" : "false");
+  }
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_category_policy", allowed }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return Boolean(data.allowRepAddCategory);
+    }
+  } catch (err) {
+    console.warn("Failed to sync category policy to server:", err);
+  }
+  return allowed;
+}
 
 export function getAdminPin(): string {
   if (typeof window === "undefined") return "9999";
@@ -281,11 +311,16 @@ export async function saveCategoryToNetwork(cat: CustomCategoryEntry): Promise<{
 export function buildMergedProductCategories(
   customCategories: CustomCategoryEntry[] = [],
   customBrands: CustomBrandEntry[] = [],
-  audits: AuditRecord[] = []
+  audits: AuditRecord[] = [],
+  allowRepAddCategory: boolean = false
 ): ProductCategoryConfig[] {
   const catMap = new Map<string, ProductCategoryConfig>();
 
   PRODUCT_CATEGORIES.forEach((cat) => {
+    // If category creation is disabled for reps, hide "other-fmcg" / "Other Category"
+    if (!allowRepAddCategory && (cat.id === "other-fmcg" || cat.id === "general-fmcg")) {
+      return;
+    }
     catMap.set(cat.name.toLowerCase(), {
       ...cat,
       brands: cat.brands.map((b) => ({
@@ -298,7 +333,7 @@ export function buildMergedProductCategories(
     });
   });
 
-  // 1. Merge custom categories
+  // 1. Merge custom categories (enrolled by Admin or authorized network)
   customCategories.forEach((cc) => {
     if (!cc || !cc.name) return;
     const key = cc.name.trim().toLowerCase();
@@ -314,7 +349,7 @@ export function buildMergedProductCategories(
     }
   });
 
-  // 2. Merge custom brands & variants
+  // 2. Merge custom brands & variants into existing categories
   customBrands.forEach((cb) => {
     if (!cb || !cb.brand) return;
     const catName = cb.category || "General FMCG";
@@ -329,15 +364,19 @@ export function buildMergedProductCategories(
       }
     }
     if (!cat) {
-      cat = {
-        id: catKey.replace(/[^a-z0-9]+/g, "-"),
-        name: catName,
-        unit: cb.unit || "ml",
-        unitStepLabel: `per 100${cb.unit || "ml"}`,
-        defaultSizes: cb.commonSizes?.length ? cb.commonSizes : [50, 100, 200],
-        brands: [],
-      };
-      catMap.set(catKey, cat);
+      if (allowRepAddCategory) {
+        cat = {
+          id: catKey.replace(/[^a-z0-9]+/g, "-"),
+          name: catName,
+          unit: cb.unit || "ml",
+          unitStepLabel: `per 100${cb.unit || "ml"}`,
+          defaultSizes: cb.commonSizes?.length ? cb.commonSizes : [50, 100, 200],
+          brands: [],
+        };
+        catMap.set(catKey, cat);
+      } else {
+        return;
+      }
     }
 
     const existingBrand = cat.brands.find(
@@ -367,22 +406,13 @@ export function buildMergedProductCategories(
     }
   });
 
-  // 3. Harvest any new categories, brands, variants from all recorded audits across the network
+  // 3. Harvest brands and variants from audits (do NOT harvest rogue categories from audits)
   audits.forEach((audit) => {
     if (!audit.category || !audit.brand || audit.brand === "Other") return;
     const catKey = audit.category.trim().toLowerCase();
     let cat = catMap.get(catKey);
-    if (!cat) {
-      cat = {
-        id: catKey.replace(/[^a-z0-9]+/g, "-"),
-        name: audit.category.trim(),
-        unit: audit.unit || "ml",
-        unitStepLabel: `per 100${audit.unit || "ml"}`,
-        defaultSizes: audit.packSize ? [audit.packSize] : [100],
-        brands: [],
-      };
-      catMap.set(catKey, cat);
-    }
+    // Strict guard: do not create rogue categories from audit typos!
+    if (!cat) return;
 
     const brandName = audit.brand.trim();
     let brandConfig = cat.brands.find(
@@ -493,6 +523,7 @@ export async function syncWithCentralRepo(
   stores: Store[];
   categories: CustomCategoryEntry[];
   brands: CustomBrandEntry[];
+  allowRepAddCategory?: boolean;
   message: string;
 }> {
   const localAudits = getAudits();
@@ -526,6 +557,12 @@ export async function syncWithCentralRepo(
           if (data.brands) {
             localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(data.brands));
           }
+          if (data.allowRepAddCategory !== undefined) {
+            localStorage.setItem(
+              ALLOW_REP_CATEGORY_KEY,
+              data.allowRepAddCategory ? "true" : "false"
+            );
+          }
         }
         return {
           success: true,
@@ -533,6 +570,7 @@ export async function syncWithCentralRepo(
           stores: data.stores,
           categories: data.categories || [],
           brands: data.brands || [],
+          allowRepAddCategory: Boolean(data.allowRepAddCategory),
           message: isAdmin
             ? `Admin: Synced ${data.totalAudits} total audits across all reps!`
             : `Synced your territory audits to Central Repository!`,
@@ -554,6 +592,7 @@ export async function syncWithCentralRepo(
     stores: localStores,
     categories: localCategories,
     brands: localBrands,
+    allowRepAddCategory: getAllowRepAddCategory(),
     message: "Audits marked synced locally.",
   };
 }

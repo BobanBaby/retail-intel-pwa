@@ -20,6 +20,7 @@ import {
   saveCustomCategory,
   getCustomBrands,
   saveCustomBrand,
+  getAllowRepAddCategory,
 } from "@/lib/storage";
 import { UserCheck, Sparkles, ArrowRight, ShieldCheck, Smartphone, RefreshCw } from "lucide-react";
 
@@ -29,6 +30,7 @@ export default function Home() {
   const [allAudits, setAllAudits] = useState<AuditRecord[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategoryEntry[]>([]);
   const [customBrands, setCustomBrands] = useState<CustomBrandEntry[]>([]);
+  const [allowRepAddCategory, setAllowRepAddCategory] = useState<boolean>(false);
   const [repName, setRepName] = useState<string>("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [tempRepInput, setTempRepInput] = useState("");
@@ -52,6 +54,7 @@ export default function Home() {
     setAllAudits(getAudits());
     setCustomCategories(getCustomCategories());
     setCustomBrands(getCustomBrands());
+    setAllowRepAddCategory(getAllowRepAddCategory());
     setIsLoaded(true);
 
     // Auto-fetch latest audits & network catalog from Central Server on load
@@ -64,6 +67,7 @@ export default function Home() {
             setStores(res.stores);
             if (res.categories) setCustomCategories(res.categories);
             if (res.brands) setCustomBrands(res.brands);
+            if (res.allowRepAddCategory !== undefined) setAllowRepAddCategory(res.allowRepAddCategory);
           }
         })
         .catch((err) => console.warn("Background initial sync failed:", err))
@@ -83,6 +87,7 @@ export default function Home() {
               setStores(res.stores);
               if (res.categories) setCustomCategories(res.categories);
               if (res.brands) setCustomBrands(res.brands);
+              if (res.allowRepAddCategory !== undefined) setAllowRepAddCategory(res.allowRepAddCategory);
               setSyncToast("Online: Field audits synced to Central Database!");
               setTimeout(() => setSyncToast(null), 3000);
             }
@@ -315,6 +320,7 @@ export default function Home() {
             onAddCustomCategory={handleAddCustomCategory}
             onAddCustomBrand={handleAddCustomBrand}
             allAudits={allAudits}
+            allowRepAddCategory={allowRepAddCategory}
           />
         )}
 
