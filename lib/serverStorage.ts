@@ -238,23 +238,62 @@ export async function deleteCentralBrandAsync(brandName: string, category?: stri
   return updated;
 }
 
-export async function deleteCentralCategoryAsync(categoryName: string): Promise<CentralData> {
+export async function deleteCentralCategoryAsync(
+  categoryName: string,
+  reassignToCategory?: string
+): Promise<CentralData> {
   const data = await getCentralDataAsync();
   const targetCat = categoryName.trim().toLowerCase();
+  const cleanReassign = reassignToCategory ? reassignToCategory.trim() : "";
 
   const filteredCategories = (data.customCategories || []).filter(
     (c) => c.name.trim().toLowerCase() !== targetCat && c.id.toLowerCase() !== targetCat
   );
 
-  // Also remove brands belonging to this category
-  const filteredBrands = (data.customBrands || []).filter(
-    (b) => (b.category || "").trim().toLowerCase() !== targetCat
-  );
+  // Also remove brands belonging to this category or reassign them
+  const updatedBrands = (data.customBrands || [])
+    .map((b) => {
+      if ((b.category || "").trim().toLowerCase() === targetCat) {
+        return cleanReassign ? { ...b, category: cleanReassign } : null;
+      }
+      return b;
+    })
+    .filter(Boolean) as CustomBrandEntry[];
+
+  // Update audits: if reassign target provided, migrate them to the correct category
+  const updatedAudits = data.audits.map((a) => {
+    if ((a.category || "").trim().toLowerCase() === targetCat) {
+      return cleanReassign ? { ...a, category: cleanReassign } : a;
+    }
+    return a;
+  });
 
   const updated: CentralData = {
     ...data,
+    audits: updatedAudits,
     customCategories: filteredCategories,
-    customBrands: filteredBrands,
+    customBrands: updatedBrands,
+    lastUpdated: new Date().toISOString(),
+  };
+  await saveCentralDataAsync(updated);
+  return updated;
+}
+
+export async function updateAuditCategoryAsync(
+  auditId: string,
+  newCategory: string
+): Promise<CentralData> {
+  const data = await getCentralDataAsync();
+  const cleanCat = newCategory.trim();
+  const updatedAudits = data.audits.map((a) => {
+    if (a.id === auditId) {
+      return { ...a, category: cleanCat };
+    }
+    return a;
+  });
+  const updated: CentralData = {
+    ...data,
+    audits: updatedAudits,
     lastUpdated: new Date().toISOString(),
   };
   await saveCentralDataAsync(updated);

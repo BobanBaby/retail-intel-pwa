@@ -5,6 +5,7 @@ import {
   syncCentralDataAsync,
   deleteCentralBrandAsync,
   deleteCentralCategoryAsync,
+  updateAuditCategoryAsync,
   deleteCentralStoreAsync,
   deleteCentralAuditAsync,
   setCentralAdminPinAsync,
@@ -123,14 +124,26 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "delete_category") {
-      const { categoryName } = body;
-      const updated = await deleteCentralCategoryAsync(categoryName);
+      const { categoryName, reassignToCategory } = body;
+      const updated = await deleteCentralCategoryAsync(categoryName, reassignToCategory);
       return NextResponse.json({
         success: true,
-        message: `Category "${categoryName}" deleted from central catalog`,
+        message: reassignToCategory
+          ? `Category "${categoryName}" deleted and audits migrated to "${reassignToCategory}"`
+          : `Category "${categoryName}" deleted from central catalog`,
         categories: updated.customCategories || [],
         brands: updated.customBrands || [],
         stores: updated.stores,
+        audits: updated.audits,
+      });
+    }
+
+    if (action === "reassign_audit_category") {
+      const { auditId, newCategory } = body;
+      const updated = await updateAuditCategoryAsync(auditId, newCategory);
+      return NextResponse.json({
+        success: true,
+        message: `Audit reassigned to "${newCategory}"`,
         audits: updated.audits,
       });
     }

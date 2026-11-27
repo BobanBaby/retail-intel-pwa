@@ -183,13 +183,26 @@ export async function deleteBrandFromNetwork(brandName: string, category?: strin
   return { success: true, brands: getCustomBrands() };
 }
 
-export async function deleteCategoryFromNetwork(categoryName: string): Promise<{ success: boolean; categories: CustomCategoryEntry[]; brands: CustomBrandEntry[] }> {
+export async function deleteCategoryFromNetwork(
+  categoryName: string,
+  reassignToCategory?: string
+): Promise<{
+  success: boolean;
+  categories: CustomCategoryEntry[];
+  brands: CustomBrandEntry[];
+  audits?: AuditRecord[];
+}> {
   deleteCustomCategory(categoryName);
   try {
     const res = await fetch("/api/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete_category", categoryName, isAdmin: true }),
+      body: JSON.stringify({
+        action: "delete_category",
+        categoryName,
+        reassignToCategory,
+        isAdmin: true,
+      }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -199,10 +212,14 @@ export async function deleteCategoryFromNetwork(categoryName: string): Promise<{
       if (data.brands && typeof window !== "undefined") {
         localStorage.setItem(CUSTOM_BRANDS_KEY, JSON.stringify(data.brands));
       }
+      if (data.audits && typeof window !== "undefined") {
+        localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify(data.audits));
+      }
       return {
         success: true,
         categories: data.categories || getCustomCategories(),
         brands: data.brands || getCustomBrands(),
+        audits: data.audits,
       };
     }
   } catch (err) {
@@ -213,6 +230,34 @@ export async function deleteCategoryFromNetwork(categoryName: string): Promise<{
     categories: getCustomCategories(),
     brands: getCustomBrands(),
   };
+}
+
+export async function reassignAuditCategory(
+  auditId: string,
+  newCategory: string
+): Promise<{ success: boolean; audits?: AuditRecord[] }> {
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "reassign_audit_category",
+        auditId,
+        newCategory,
+        isAdmin: true,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.audits && typeof window !== "undefined") {
+        localStorage.setItem(AUDITS_STORAGE_KEY, JSON.stringify(data.audits));
+      }
+      return { success: true, audits: data.audits };
+    }
+  } catch (err) {
+    console.warn("reassignAuditCategory failed:", err);
+  }
+  return { success: false };
 }
 
 export async function deleteStoreFromNetwork(storeId: string): Promise<{ success: boolean; stores: Store[] }> {

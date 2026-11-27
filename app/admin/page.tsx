@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   LogOut,
   Trash2,
+  Edit2,
   AlertTriangle,
   RotateCcw,
   Plus,
@@ -74,6 +75,7 @@ import {
   saveAdminPin,
   saveAllowRepAddCategory,
   getAllowRepAddCategory,
+  reassignAuditCategory,
 } from "@/lib/storage";
 
 // Default admin PIN for security
@@ -157,6 +159,28 @@ export default function AdminPage() {
     category: string;
   } | null>(null);
   const [newVariantInput, setNewVariantInput] = useState("");
+
+  // Category Cleanup & Migration Modal State
+  const [cleanCategoryModal, setCleanCategoryModal] = useState<{
+    catName: string;
+    auditsCount: number;
+  } | null>(null);
+  const [reassignTargetCat, setReassignTargetCat] = useState<string>(
+    PRODUCT_CATEGORIES[0]?.name || "Hair Elixir for Women"
+  );
+  const [isCleaningCat, setIsCleaningCat] = useState<boolean>(false);
+
+  // Single Audit Reassign Category Modal State
+  const [reassignAuditModal, setReassignAuditModal] = useState<{
+    auditId: string;
+    currentCat: string;
+    shopName: string;
+    brand: string;
+  } | null>(null);
+  const [auditTargetCat, setAuditTargetCat] = useState<string>(
+    PRODUCT_CATEGORIES[0]?.name || "Hair Elixir for Women"
+  );
+  const [isReassigningAudit, setIsReassigningAudit] = useState<boolean>(false);
 
   // Store Directory State
   const [storeSearch, setStoreSearch] = useState("");
@@ -393,18 +417,57 @@ export default function AdminPage() {
     setSyncing(false);
   };
 
-  const handleDeleteCategory = async (catName: string) => {
-    if (
-      !confirm(
-        `Are you sure you want to delete category "${catName}" and its custom brands across the network?`
-      )
-    )
-      return;
+  const handleDeleteCategory = (catName: string) => {
+    const auditsCount = audits.filter(
+      (a) => a.category?.trim().toLowerCase() === catName.trim().toLowerCase()
+    ).length;
+    if (auditsCount > 0) {
+      setCleanCategoryModal({ catName, auditsCount });
+      const defaultTarget = PRODUCT_CATEGORIES.find(
+        (c) => c.name.toLowerCase() !== catName.toLowerCase()
+      )?.name || PRODUCT_CATEGORIES[0]?.name || "Hair Elixir for Women";
+      setReassignTargetCat(defaultTarget);
+    } else {
+      if (confirm(`Permanently delete custom category "${catName}" from network?`)) {
+        handleExecuteCleanCategory(catName);
+      }
+    }
+  };
+
+  const handleExecuteCleanCategory = async (catName: string, reassignTo?: string) => {
     setSyncing(true);
-    const res = await deleteCategoryFromNetwork(catName);
-    setCustomCategories(res.categories);
-    setCustomBrands(res.brands);
-    setSyncing(false);
+    setIsCleaningCat(true);
+    try {
+      const res = await deleteCategoryFromNetwork(catName, reassignTo);
+      setCustomCategories(res.categories);
+      setCustomBrands(res.brands);
+      if (res.audits) {
+        setAudits(res.audits);
+      }
+      setCleanCategoryModal(null);
+    } catch (err) {
+      console.error("Clean category error:", err);
+    } finally {
+      setSyncing(false);
+      setIsCleaningCat(false);
+    }
+  };
+
+  const handleExecuteReassignAudit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reassignAuditModal || !auditTargetCat) return;
+    setIsReassigningAudit(true);
+    try {
+      const res = await reassignAuditCategory(reassignAuditModal.auditId, auditTargetCat);
+      if (res.success && res.audits) {
+        setAudits(res.audits);
+      }
+      setReassignAuditModal(null);
+    } catch (err) {
+      console.error("Reassign audit error:", err);
+    } finally {
+      setIsReassigningAudit(false);
+    }
   };
 
   // Brand Actions
@@ -1306,7 +1369,27 @@ export default function AdminPage() {
                             <span className="text-[10px] text-slate-500">{a.area}</span>
                           </td>
                           <td className="py-3 px-3 font-semibold text-slate-700 whitespace-nowrap">{a.district}</td>
-                          <td className="py-3 px-3 text-slate-600">{a.category}</td>
+                          <td className="py-3 px-3 text-slate-600">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-semibold">{a.category}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReassignAuditModal({
+                                    auditId: a.id,
+                                    currentCat: a.category,
+                                    shopName: a.storeName,
+                                    brand: a.brand,
+                                  });
+                                  setAuditTargetCat(PRODUCT_CATEGORIES[0]?.name || "Hair Elixir for Women");
+                                }}
+                                className="text-slate-300 hover:text-blue-600 p-0.5 rounded transition"
+                                title="Change / reassign category for this audit"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </td>
                           <td className="py-3 px-3">
                             <span className="font-bold text-blue-700">{a.brand}</span> &bull;{" "}
                             <span className="text-slate-700">{a.variant}</span>{" "}
@@ -2576,6 +2659,173 @@ export default function AdminPage() {
                   className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition"
                 >
                   {syncing ? "Saving..." : "Save New PIN"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CLEAN UP / MIGRATE WRONG CATEGORY */}
+      {cleanCategoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Clean Up Wrong Category
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Category: <strong className="text-slate-800">"{cleanCategoryModal.catName}"</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCleanCategoryModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                <p className="font-bold mb-1">
+                  ⚠️ {cleanCategoryModal.auditsCount} audit(s) were submitted under this category.
+                </p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Instead of losing those store audit records, choose an approved standard category to migrate and reassign them to.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Migrate audits into approved category:
+                </label>
+                <select
+                  value={reassignTargetCat}
+                  onChange={(e) => setReassignTargetCat(e.target.value)}
+                  className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-hidden"
+                >
+                  {PRODUCT_CATEGORIES.filter(
+                    (c) => c.name.toLowerCase() !== cleanCategoryModal.catName.toLowerCase()
+                  ).map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                  {customCategories
+                    .filter(
+                      (c) => c.name.toLowerCase() !== cleanCategoryModal.catName.toLowerCase()
+                    )
+                    .map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name} (Custom)
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  disabled={isCleaningCat}
+                  onClick={() =>
+                    handleExecuteCleanCategory(cleanCategoryModal.catName, reassignTargetCat)
+                  }
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-xs transition flex items-center justify-center space-x-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>
+                    {isCleaningCat ? "Migrating..." : `Migrate Audits & Delete "${cleanCategoryModal.catName}"`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isCleaningCat}
+                  onClick={() =>
+                    handleExecuteCleanCategory(cleanCategoryModal.catName)
+                  }
+                  className="text-rose-600 hover:bg-rose-50 border border-rose-200 font-bold text-xs py-2 px-3 rounded-xl transition"
+                  title="Delete category without reassigning"
+                >
+                  Delete Only
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REASSIGN SINGLE AUDIT CATEGORY */}
+      {reassignAuditModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Reassign Audit Category
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {reassignAuditModal.shopName} &bull; {reassignAuditModal.brand}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassignAuditModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteReassignAudit} className="p-4 space-y-3">
+              <div>
+                <span className="text-[10px] text-slate-400 font-medium block">Currently assigned as:</span>
+                <span className="text-xs font-bold text-rose-600">{reassignAuditModal.currentCat}</span>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Select Correct Category:
+                </label>
+                <select
+                  value={auditTargetCat}
+                  onChange={(e) => setAuditTargetCat(e.target.value)}
+                  className="w-full text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-800 focus:outline-hidden"
+                >
+                  {PRODUCT_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                  {customCategories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name} (Custom)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setReassignAuditModal(null)}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isReassigningAudit}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs"
+                >
+                  {isReassigningAudit ? "Saving..." : "Update Category"}
                 </button>
               </div>
             </form>
