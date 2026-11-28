@@ -45,6 +45,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Camera,
 } from "lucide-react";
 import {
   AuditRecord,
@@ -181,6 +182,9 @@ export default function AdminPage() {
     PRODUCT_CATEGORIES[0]?.name || "Hair Elixir for Women"
   );
   const [isReassigningAudit, setIsReassigningAudit] = useState<boolean>(false);
+
+  // Shelf Photo Viewer Modal State
+  const [viewPhotoAudit, setViewPhotoAudit] = useState<AuditRecord | null>(null);
 
   // Store Directory State
   const [storeSearch, setStoreSearch] = useState("");
@@ -1386,6 +1390,7 @@ export default function AdminPage() {
                       <th className="py-2.5 px-3">District</th>
                       <th className="py-2.5 px-3">Category</th>
                       <th className="py-2.5 px-3">Competitor SKU</th>
+                      <th className="py-2.5 px-3 text-center">Photo</th>
                       <th className="py-2.5 px-3 text-right">MRP</th>
                       <th className="py-2.5 px-3 text-right">Cost</th>
                       <th className="py-2.5 px-3 text-right whitespace-nowrap">Margin %</th>
@@ -1398,7 +1403,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-slate-100">
                     {filteredAudits.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-10 text-center text-slate-400 text-xs font-medium">
+                        <td colSpan={12} className="py-10 text-center text-slate-400 text-xs font-medium">
                           No audit records found matching your filter criteria.
                         </td>
                       </tr>
@@ -1437,6 +1442,21 @@ export default function AdminPage() {
                             <span className="text-slate-400 text-[11px]">
                               ({a.packSize} {a.unit})
                             </span>
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {a.photoData ? (
+                              <button
+                                type="button"
+                                onClick={() => setViewPhotoAudit(a)}
+                                className="inline-flex items-center space-x-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-2 py-1 text-[11px] font-bold transition shadow-2xs group cursor-pointer"
+                                title="Click to view full shelf photo"
+                              >
+                                <Camera className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition" />
+                                <span>View</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-300 text-[11px] font-normal italic">None</span>
+                            )}
                           </td>
                           <td className="py-3 px-3 text-right font-black text-slate-900 whitespace-nowrap">₹{a.mrp}</td>
                           <td className="py-3 px-3 text-right font-semibold text-slate-600 whitespace-nowrap">
@@ -2870,6 +2890,101 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Shelf Photo Viewer Modal */}
+      {viewPhotoAudit && viewPhotoAudit.photoData && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                  <Camera className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs sm:text-sm font-bold leading-tight truncate">
+                    Shelf Audit Photo
+                  </h4>
+                  <p className="text-[10px] sm:text-[11px] text-slate-300 truncate">
+                    {viewPhotoAudit.storeName} &bull; {viewPhotoAudit.area}, {viewPhotoAudit.district}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewPhotoAudit(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Photo Display */}
+            <div className="bg-black/95 flex-1 flex items-center justify-center p-2 overflow-hidden min-h-[260px] max-h-[55vh]">
+              <img
+                src={viewPhotoAudit.photoData}
+                alt={`Shelf audit at ${viewPhotoAudit.storeName}`}
+                className="max-h-[52vh] max-w-full object-contain rounded-lg shadow-md"
+              />
+            </div>
+
+            {/* Audit Metadata Details */}
+            <div className="p-3.5 bg-slate-50 border-t border-slate-200 text-xs space-y-2 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">Category &amp; SKU</span>
+                  <span className="font-bold text-slate-900">
+                    {viewPhotoAudit.brand} &bull; {viewPhotoAudit.variant} ({viewPhotoAudit.packSize}{viewPhotoAudit.unit})
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Category: {viewPhotoAudit.category}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">Facings &amp; Margin</span>
+                  <span className="font-bold text-slate-900">{viewPhotoAudit.shelfFacings} front facings</span>
+                  <span className="text-[11px] text-emerald-600 font-bold block">
+                    MRP ₹{viewPhotoAudit.mrp} {viewPhotoAudit.retailerMarginPct ? `• Margin ${viewPhotoAudit.retailerMarginPct}%` : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Audited by <strong className="text-slate-800">{viewPhotoAudit.repName}</strong></span>
+                <span>
+                  {new Date(viewPhotoAudit.createdAt).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}{" "}
+                  at{" "}
+                  {new Date(viewPhotoAudit.createdAt).toLocaleTimeString("en-IN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-2">
+                <a
+                  href={viewPhotoAudit.photoData}
+                  download={`shelf-audit-${viewPhotoAudit.storeName.replace(/\s+/g, "_")}-${viewPhotoAudit.id.slice(0, 6)}.jpg`}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg shadow-2xs transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Photo</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setViewPhotoAudit(null)}
+                  className="px-4 py-1.5 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
