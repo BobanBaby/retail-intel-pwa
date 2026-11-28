@@ -19,6 +19,8 @@ export interface CentralData {
 
 // In-memory cache for serverless invocation lifecycle
 let memoryCache: CentralData | null = null;
+let lastCacheFetchTime = 0;
+const CACHE_TTL_MS = 25000; // 25 seconds in-memory TTL on serverless container
 
 // Dynamic Redis / KV credential resolver (supports all Vercel KV, Upstash, and REDIS_URL formats)
 function getRedisCredentials(): { url: string; token: string } | null {
@@ -155,11 +157,17 @@ function saveLocalFile(data: CentralData) {
   }
 }
 
-export async function getCentralDataAsync(): Promise<CentralData> {
+export async function getCentralDataAsync(forceRefresh = false): Promise<CentralData> {
+  // If memory cache is fresh (within TTL) and not forced, return immediately (0 Redis bandwidth)
+  if (!forceRefresh && memoryCache && (Date.now() - lastCacheFetchTime < CACHE_TTL_MS)) {
+    return memoryCache;
+  }
+
   // 1. Try Upstash Redis / Vercel KV if configured
   const upstashData = await loadFromUpstash();
   if (upstashData) {
     memoryCache = upstashData;
+    lastCacheFetchTime = Date.now();
     return upstashData;
   }
 
@@ -172,6 +180,7 @@ export async function getCentralDataAsync(): Promise<CentralData> {
   const fileData = loadLocalFile();
   if (fileData) {
     memoryCache = fileData;
+    lastCacheFetchTime = Date.now();
     return fileData;
   }
 
@@ -187,6 +196,7 @@ export async function getCentralDataAsync(): Promise<CentralData> {
 
 export async function saveCentralDataAsync(data: CentralData): Promise<void> {
   memoryCache = data;
+  lastCacheFetchTime = Date.now();
   saveLocalFile(data);
   await saveToUpstash(data);
 }

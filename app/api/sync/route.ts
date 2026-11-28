@@ -27,13 +27,33 @@ export async function GET(req: NextRequest) {
     const adminPin = centralData.adminPin || "9999";
     const isCloudConfigured = isCloudStorageConfigured();
 
+    // Generate ETag representing current state to prevent downloading unchanged data
+    const roleKey = isAdmin ? "admin" : repName || "anon";
+    const dataVersion = `W/"${roleKey}-${centralData.lastUpdated || "0"}-${allAudits.length}-${allStores.length}-${centralData.customCategories?.length || 0}-${centralData.customBrands?.length || 0}-${adminPin}-${Boolean(centralData.allowRepAddCategory)}"`;
+
+    const clientIfNoneMatch = req.headers.get("if-none-match");
+    if (clientIfNoneMatch && clientIfNoneMatch === dataVersion) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: {
+          ETag: dataVersion,
+          "Cache-Control": "private, no-cache",
+        },
+      });
+    }
+
+    const responseHeaders = {
+      ETag: dataVersion,
+      "Cache-Control": "private, no-cache",
+    };
+
     // If requested for login check or admin portal
     if (checkPin) {
       return NextResponse.json({
         success: true,
         adminPin,
         isCloudConfigured,
-      });
+      }, { headers: responseHeaders });
     }
 
     // Admin sees everything
@@ -50,7 +70,7 @@ export async function GET(req: NextRequest) {
         adminPin,
         allowRepAddCategory: Boolean(centralData.allowRepAddCategory),
         isCloudConfigured,
-      });
+      }, { headers: responseHeaders });
     }
 
     // Sales person ONLY sees their own audits, but gets all stores, categories & brands
@@ -68,7 +88,7 @@ export async function GET(req: NextRequest) {
       categories: centralData.customCategories || [],
       brands: centralData.customBrands || [],
       allowRepAddCategory: Boolean(centralData.allowRepAddCategory),
-    });
+    }, { headers: responseHeaders });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to fetch central data" },

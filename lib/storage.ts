@@ -679,8 +679,8 @@ export async function compressImage(file: File): Promise<string> {
       const img = new Image();
       img.src = event.target?.result as string;
       img.onload = () => {
-        const maxWidth = 800;
-        const maxHeight = 800;
+        const maxWidth = 500;
+        const maxHeight = 500;
         let width = img.width;
         let height = img.height;
 
@@ -705,7 +705,7 @@ export async function compressImage(file: File): Promise<string> {
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.55);
         resolve(dataUrl);
       };
       img.onerror = (err) => reject(err);

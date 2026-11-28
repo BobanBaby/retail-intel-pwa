@@ -269,28 +269,69 @@ export default function AdminPage() {
     setIsLoaded(true);
   }, []);
 
-  // Real-time live polling: Keep admin data in sync with field sales reps automatically
+  // Real-time live polling: Keep admin data in sync with field sales reps with bandwidth-saving ETags
   useEffect(() => {
     if (!isAuthenticated) return;
+    let lastEtag = "";
+    let isSubscribed = true;
+
+    // Track user activity to pause polling when admin is away/idle
+    let lastActiveTime = Date.now();
+    const onActivity = () => {
+      lastActiveTime = Date.now();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("mousemove", onActivity);
+      window.addEventListener("keydown", onActivity);
+      window.addEventListener("touchstart", onActivity);
+    }
+
     const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        fetch("/api/sync?isAdmin=true")
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (data && data.audits) {
-              setAudits(data.audits);
-              setStores(data.stores);
-              if (data.categories) setCustomCategories(data.categories);
-              if (data.brands) setCustomBrands(data.brands);
-              if (data.adminPin) setAdminPinState(data.adminPin);
-              if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
-              if (data.allowRepAddCategory !== undefined) setAllowRepAddCategory(data.allowRepAddCategory);
-            }
-          })
-          .catch(() => {});
+      if (!isSubscribed) return;
+      if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+
+      // Stop polling if user has been inactive for more than 15 minutes to save bandwidth
+      if (Date.now() - lastActiveTime > 15 * 60 * 1000) return;
+
+      const headers: Record<string, string> = {};
+      if (lastEtag) {
+        headers["If-None-Match"] = lastEtag;
       }
-    }, 15000);
-    return () => clearInterval(interval);
+
+      fetch("/api/sync?isAdmin=true", { headers })
+        .then((res) => {
+          // 304 Not Modified: Data has not changed! Zero bandwidth downloaded.
+          if (res.status === 304) {
+            return null;
+          }
+          const newEtag = res.headers.get("ETag");
+          if (newEtag) lastEtag = newEtag;
+          return res.ok ? res.json() : null;
+        })
+        .then((data) => {
+          if (!data || !isSubscribed) return;
+          if (data.audits) {
+            setAudits(data.audits);
+            setStores(data.stores);
+            if (data.categories) setCustomCategories(data.categories);
+            if (data.brands) setCustomBrands(data.brands);
+            if (data.adminPin) setAdminPinState(data.adminPin);
+            if (data.isCloudConfigured !== undefined) setIsCloudConfigured(data.isCloudConfigured);
+            if (data.allowRepAddCategory !== undefined) setAllowRepAddCategory(data.allowRepAddCategory);
+          }
+        })
+        .catch(() => {});
+    }, 45000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("mousemove", onActivity);
+        window.removeEventListener("keydown", onActivity);
+        window.removeEventListener("touchstart", onActivity);
+      }
+    };
   }, [isAuthenticated]);
 
   const handleVerifyPin = (e: React.FormEvent) => {
