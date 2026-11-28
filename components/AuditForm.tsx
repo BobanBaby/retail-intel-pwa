@@ -227,7 +227,7 @@ export default function AuditForm({
   }, [customCategories, customBrands, allAudits, allowRepAddCategory]);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
-    availableCategories[0]?.id || "hair-spray"
+    availableCategories[0]?.id || PRODUCT_CATEGORIES[0]?.id || "beard-oil"
   );
 
   const selectedCategory =
